@@ -1,16 +1,29 @@
 import os, math, uuid, hashlib, requests, urllib.parse
 from datetime import datetime
 from functools import wraps
-from flask import (Flask, render_template, request, session,
-                   redirect, url_for, jsonify)
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask_session import Session
 from supabase import create_client
 from geopy.geocoders import Nominatim
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
 
+# Server-side filesystem sessions — no 4KB cookie limit
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = "/tmp/flask_sessions"
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_USE_SIGNER"] = True
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+Session(app)
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("WARNING: SUPABASE_URL or SUPABASE_KEY not set!", flush=True)
+else:
+    print(f"Supabase OK: {SUPABASE_URL[:40]}", flush=True)
 
 COLORS     = ["red","blue","green","orange","purple","darkred","cadetblue","darkgreen"]
 HEX_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#c0392b","#5f9ea0","#27ae60"]
