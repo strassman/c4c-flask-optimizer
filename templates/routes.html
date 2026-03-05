@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Routes{% endblock %}
+{% block content %}
+<h1>📍 Route History</h1>
+<p class="subtitle">Check off stops as you go</p>
+
+{% if not d.history %}
+<div class="alert alert-info">No routes yet. Run the optimizer on the 🚐 Delivery Run page.</div>
+{% else %}
+{% for rec in d.history %}
+<div class="card" style="{% if loop.index0==0 %}border-color:#4a9eff{% endif %}">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div>
+      <strong style="font-size:15px">📅 {{ rec.timestamp }}</strong>
+      {% if loop.index0==0 %}<span class="badge badge-green" style="margin-left:8px">Most Recent</span>{% endif %}
+    </div>
+    <form method="POST" onsubmit="return confirm('Delete this run from history?')">
+      <input type="hidden" name="action" value="delete_run">
+      <input type="hidden" name="run_index" value="{{ loop.index0 }}">
+      <button class="btn btn-danger btn-sm" type="submit">🗑️ Delete Run</button>
+    </form>
+  </div>
+
+  {% for r in rec.routes %}
+  {% set vol = r.volunteer %}
+  <details {% if loop.parent.loop.index0==0 %}open{% endif %} style="margin-bottom:8px">
+    <summary>
+      <span style="color:{{ r.hex }}">●</span>
+      <strong>{{ vol.name }}</strong> — {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %} · {{ r.distance_miles }} mi
+    </summary>
+    <div class="detail-body">
+    {% for s in r.stops %}
+    {% set key = vol.name + '_' + loop.index0|string %}
+    {% set is_done = key in done %}
+    <div class="check-row">
+      <form method="POST" style="display:contents">
+        <input type="hidden" name="key"       value="{{ key }}">
+        <input type="hidden" name="address"   value="{{ s.address }}">
+        <input type="hidden" name="volunteer" value="{{ vol.name }}">
+        <input type="hidden" name="stop_num"  value="{{ loop.index }}">
+        {% if is_done %}
+        <input type="hidden" name="action" value="unmark_done">
+        <input type="checkbox" checked onchange="this.form.submit()">
+        {% else %}
+        <input type="hidden" name="action" value="mark_done">
+        <input type="checkbox" onchange="this.form.submit()">
+        {% endif %}
+      </form>
+      <div style="flex:1">
+        {% if is_done %}
+        <span style="text-decoration:line-through;color:#888">
+          <strong>Stop {{ loop.index }}:</strong> {{ s.address }}
+          {% if s.contact %} · 👤 {{ s.contact }}{% endif %}
+        </span>
+        <span style="color:#22c55e;margin-left:6px">✅ {{ done[key].delivered_date if key in done else '' }}</span>
+        {% else %}
+        <strong>Stop {{ loop.index }}:</strong> {{ s.address }}
+        {% if s.contact %}<span style="color:#888"> · 👤 {{ s.contact }}</span>{% endif %}
+        {% if s.note %}<span style="color:#888"> — <em>{{ s.note }}</em></span>{% endif %}
+        {% endif %}
+        <br>
+        {% set prev = vol.address if loop.index0==0 else r.stops[loop.index0-1].address %}
+        <a href="{{ gmaps_url(prev, s.address) }}" target="_blank" style="font-size:12px;color:#4a9eff">📍 Directions</a>
+      </div>
+    </div>
+    {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
