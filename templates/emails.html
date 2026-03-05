@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Emails & Texts{% endblock %}
+{% block content %}
+<h1>📧 Emails & Texts</h1>
+<p class="subtitle">Send route details to your volunteers</p>
+
+{% if not emails %}
+<div class="alert alert-info">Run the optimizer on the 🚐 Delivery Run page first.</div>
+{% else %}
+
+<!-- Bulk buttons -->
+<div class="card">
+  <div class="card-title">Send to All Volunteers</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+    {% if bulk_mailto %}
+    <a href="{{ bulk_mailto }}" class="btn btn-primary">
+      📧 Email All Volunteers <span style="opacity:.7;font-size:12px">({{ all_em_count }})</span>
+    </a>
+    {% else %}
+    <span style="color:#888;font-size:13px">No emails on file</span>
+    {% endif %}
+    {% if bulk_sms %}
+    <a href="{{ bulk_sms }}" class="btn btn-success">
+      💬 Text All Volunteers <span style="opacity:.7;font-size:12px">({{ all_ph_count }})</span>
+    </a>
+    {% else %}
+    <span style="color:#888;font-size:13px">No phones on file</span>
+    {% endif %}
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- Per volunteer -->
+{% for e in emails %}
+{% set v = e.volunteer %}
+<details open style="margin-bottom:12px">
+  <summary>
+    <strong>{{ v.name }}</strong>
+    <span style="color:#888;font-size:12px;margin-left:8px">{{ v.email or 'no email' }} · {{ v.phone or 'no phone' }}</span>
+  </summary>
+  <div class="detail-body" style="padding-top:12px">
+    <div class="grid2" style="margin-bottom:12px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px">📧 Email</div>
+        {% if e.mailto %}
+        <a href="{{ e.mailto }}" class="btn btn-primary">Open in Mail App</a>
+        <div style="font-size:12px;color:#888;margin-top:4px">To: {{ v.email }}</div>
+        {% else %}
+        <span style="color:#888;font-size:13px">No email on file</span>
+        {% endif %}
+      </div>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px">💬 Text</div>
+        {% if e.sms %}
+        <a href="{{ e.sms }}" class="btn btn-success">Open in Messages</a>
+        <div style="font-size:12px;color:#888;margin-top:4px">To: {{ v.phone }}</div>
+        {% else %}
+        <span style="color:#888;font-size:13px">No phone on file</span>
+        {% endif %}
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:500;color:#aaa;margin-bottom:6px">Email Preview:</div>
+    <textarea style="width:100%;height:180px;font-size:12px;font-family:monospace;background:#0f1117;color:#aaa;border:1px solid #2d3148;border-radius:6px;padding:10px;resize:vertical" readonly>{{ e.body }}</textarea>
+  </div>
+</details>
+{% endfor %}
+{% endif %}
+{% endblock %}
