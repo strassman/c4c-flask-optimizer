@@ -26,7 +26,7 @@
   <details {% if loop.parent.loop.index0==0 %}open{% endif %} style="margin-bottom:8px">
     <summary>
       <span style="color:{{ r.hex }}">●</span>
-      <strong>{{ vol.name }}</strong> — {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %} · {{ r.distance_miles }} mi
+      <strong>{{ vol.name }}</strong> — {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %}{% if r.distance_miles != '—' %} · {{ r.distance_miles }} mi{% endif %}
     </summary>
     <div class="detail-body">
     {% for s in r.stops %}
