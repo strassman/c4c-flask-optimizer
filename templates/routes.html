@@ -8,22 +8,23 @@
 <div class="alert alert-info">No routes yet. Run the optimizer on the 🚐 Delivery Run page.</div>
 {% else %}
 {% for rec in d.history %}
-<div class="card" style="{% if loop.index0==0 %}border-color:#4a9eff{% endif %}">
+{% set rec_index = loop.index0 %}
+<div class="card" style="{% if rec_index==0 %}border-color:#4a9eff{% endif %}">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
     <div>
       <strong style="font-size:15px">📅 {{ rec.timestamp }}</strong>
-      {% if loop.index0==0 %}<span class="badge badge-green" style="margin-left:8px">Most Recent</span>{% endif %}
+      {% if rec_index==0 %}<span class="badge badge-green" style="margin-left:8px">Most Recent</span>{% endif %}
     </div>
     <form method="POST" onsubmit="return confirm('Delete this run from history?')">
       <input type="hidden" name="action" value="delete_run">
-      <input type="hidden" name="run_index" value="{{ loop.index0 }}">
+      <input type="hidden" name="run_index" value="{{ rec_index }}">
       <button class="btn btn-danger btn-sm" type="submit">🗑️ Delete Run</button>
     </form>
   </div>
 
   {% for r in rec.routes %}
   {% set vol = r.volunteer %}
-  <details {% if loop.parent.loop.index0==0 %}open{% endif %} style="margin-bottom:8px">
+  <details {% if rec_index==0 %}open{% endif %} style="margin-bottom:8px">
     <summary>
       <span style="color:{{ r.hex }}">●</span>
       <strong>{{ vol.name }}</strong> — {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %}{% if r.distance_miles != '—' %} · {{ r.distance_miles }} mi{% endif %}
