@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Volunteers{% endblock %}
+{% block content %}
+<h1>👥 Volunteer Roster</h1>
+<p class="subtitle">{{ d.vols|length }} volunteer{% if d.vols|length != 1 %}s{% endif %} on file</p>
+
+{% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>{% endif %}
+
+<div class="card">
+  <div class="card-title">Add New Volunteer</div>
+  <form method="POST">
+    <input type="hidden" name="action" value="add">
+    <div class="grid2">
+      <div>
+        <label>Full Name *</label><input type="text" name="name" placeholder="Jane Smith" required>
+        <label>Email</label><input type="text" name="email" placeholder="jane@email.com">
+        <label>Phone</label><input type="text" name="phone" placeholder="410-555-0100">
+      </div>
+      <div>
+        <label>Street *</label><input type="text" name="street" placeholder="123 Main St" required>
+        <div class="grid3">
+          <div><label>City *</label><input type="text" name="city" placeholder="Baltimore" required></div>
+          <div><label>State *</label><input type="text" name="state" placeholder="MD" required></div>
+          <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201" required></div>
+        </div>
+      </div>
+    </div>
+    <br><button class="btn btn-primary" type="submit">➕ Add Volunteer</button>
+  </form>
+</div>
+
+<details>
+  <summary>📂 Import from CSV</summary>
+  <div class="detail-body">
+    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have columns: first_name, last_name, email, phone, street_address, city, state, zip</p>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="import_csv">
+      <input type="file" name="csv_file" accept=".csv" required>
+      <br><br><button class="btn btn-secondary" type="submit">📥 Import</button>
+    </form>
+  </div>
+</details>
+
+<hr class="divider">
+
+{% if d.vols %}
+<h2>Roster</h2>
+<table class="tbl">
+  <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th></th></tr></thead>
+  <tbody>
+  {% for v in d.vols %}
+  <tr>
+    <td><strong>{{ v.name }}</strong></td>
+    <td>{{ v.email or '—' }}</td>
+    <td>{{ v.phone or '—' }}</td>
+    <td>{{ v.address or '—' }}</td>
+    <td>
+      <form method="POST" style="display:inline" onsubmit="return confirm('Remove {{ v.name }}?')">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="name" value="{{ v.name }}">
+        <button class="btn btn-danger btn-sm" type="submit">Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<br>
+<form method="POST" onsubmit="return confirm('Clear ALL volunteers?')">
+  <input type="hidden" name="action" value="clear">
+  <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All Volunteers</button>
+</form>
+{% else %}
+<div class="alert alert-info">No volunteers yet. Add one above or import from CSV.</div>
+{% endif %}
+{% endblock %}
