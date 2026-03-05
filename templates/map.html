@@ -36,10 +36,10 @@
     </div>
     {% endfor %}
   {% elif prox %}
-    {% for i, vol in enumerate(prox.volunteers) %}
+    {% for vol in prox.volunteers %}
     <div class="legend-item">
-      <span class="legend-dot" style="background:{{ HEX_COLORS[i % HEX_COLORS|length] }}"></span>
-      <strong>{{ vol.name }}</strong> — {{ prox.clusters[i]|length }} stops
+      <span class="legend-dot" style="background:{{ HEX_COLORS[loop.index0 % HEX_COLORS|length] }}"></span>
+      <strong>{{ vol.name }}</strong>
     </div>
     {% endfor %}
   {% else %}
