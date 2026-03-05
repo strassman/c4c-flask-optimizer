@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Delivery Run{% endblock %}
+{% block content %}
+<h1>🚐 Delivery Run Setup</h1>
+<p class="subtitle">Select volunteers and addresses, then optimize routes or show proximity clusters</p>
+
+{% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>{% endif %}
+
+<form method="POST" id="run-form">
+<div class="grid2">
+
+  <!-- Volunteers -->
+  <div class="card">
+    <div class="card-title">👥 Who is available today?</div>
+    {% if not d.vols %}
+    <div class="alert alert-info">Add volunteers first on the Volunteers page.</div>
+    {% else %}
+    {% for v in d.vols %}
+    <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;color:#ddd">
+      <input type="checkbox" name="avail" value="{{ v.name }}" {% if v.name in avail %}checked{% endif %}>
+      <span><strong>{{ v.name }}</strong><br><span style="color:#888;font-size:12px">{{ v.address }}</span></span>
+    </label>
+    {% endfor %}
+    {% endif %}
+  </div>
+
+  <!-- Addresses -->
+  <div class="card">
+    <div class="card-title">📍 Addresses for this Run</div>
+    {% if not d.addrs %}
+    <div class="alert alert-info">Add constituents first.</div>
+    {% else %}
+    <input type="text" id="addr-search" placeholder="🔍 Filter addresses..." oninput="filterAddrs(this.value)" style="margin-bottom:12px">
+    <div id="addr-list" style="max-height:300px;overflow-y:auto">
+    {% for a in d.addrs %}
+    {% if a.status != 'delivered' %}
+    <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #1e2235;cursor:pointer;color:#ddd">
+      <input type="checkbox" name="run_ids" value="{{ a.id }}" {% if a.id in d.run_ids %}checked{% endif %} style="margin-top:2px">
+      <span style="font-size:13px">{{ a.address }}{% if a.contact %} <span style="color:#888">· {{ a.contact }}</span>{% endif %}</span>
+    </label>
+    {% endif %}
+    {% endfor %}
+    </div>
+    <p style="color:#888;font-size:12px;margin-top:8px" id="run-count"></p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Add new address -->
+<details style="margin-bottom:16px">
+  <summary>➕ Add new address not in system</summary>
+  <div class="detail-body">
+    <div style="background:#1a1d27;padding:16px;border-radius:8px">
+      <input type="hidden" name="action" value="add_address" id="add-addr-action" disabled>
+      <div class="grid2">
+        <div>
+          <label>Street *</label><input type="text" name="street" placeholder="123 Oak St">
+          <label>Contact</label><input type="text" name="contact">
+          <label>Phone</label><input type="text" name="phone">
+        </div>
+        <div>
+          <div class="grid3">
+            <div><label>City *</label><input type="text" name="city" placeholder="Baltimore"></div>
+            <div><label>State *</label><input type="text" name="state" placeholder="MD"></div>
+            <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201"></div>
+          </div>
+          <label>Note</label><input type="text" name="note">
+        </div>
+      </div>
+      <br>
+      <button class="btn btn-primary" type="button" onclick="submitAddAddress()">Add to Run + Constituents</button>
+    </div>
+  </div>
+</details>
+
+<!-- Urgency + action buttons -->
+<div class="card">
+  <div class="card-title">⚡ Delivery Urgency</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:#ddd">
+      <input type="radio" name="urgency" value="today" checked> 🚗 Today — optimize full routes
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:#ddd">
+      <input type="radio" name="urgency" value="soon"> 📅 Sometime soon — proximity clusters
+    </label>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn btn-secondary" type="submit" name="action" value="save_run">💾 Save Run</button>
+    <button class="btn btn-danger" type="submit" name="action" value="clear_run" onclick="return confirm('Clear run?')">🗑️ Clear Run</button>
+    <button class="btn btn-primary" type="button" id="optimize-btn" onclick="submitOptimize()">
+      🚀 Optimize Routes <span class="spinner" id="opt-spinner"></span>
+    </button>
+  </div>
+</div>
+</form>
+
+<script>
+function filterAddrs(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.addr-item').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+function updateCount() {
+  const checked = document.querySelectorAll('input[name="run_ids"]:checked').length;
+  document.getElementById('run-count').textContent = checked + ' stop' + (checked !== 1 ? 's' : '') + ' selected';
+}
+document.querySelectorAll('input[name="run_ids"]').forEach(cb => cb.addEventListener('change', updateCount));
+updateCount();
+
+function submitOptimize() {
+  const urgency = document.querySelector('input[name="urgency"]:checked').value;
+  const action  = urgency === 'today' ? 'optimize' : 'proximity';
+  document.getElementById('opt-spinner').style.display = 'inline-block';
+  document.getElementById('optimize-btn').disabled = true;
+  document.getElementById('optimize-btn').textContent = urgency === 'today' ? '⏳ Optimizing...' : '⏳ Clustering...';
+
+  // Create a hidden input for action
+  const inp = document.createElement('input');
+  inp.type = 'hidden'; inp.name = 'action'; inp.value = action;
+  document.getElementById('run-form').appendChild(inp);
+  document.getElementById('run-form').submit();
+}
+function submitAddAddress() {
+  document.getElementById('add-addr-action').disabled = false;
+  document.getElementById('add-addr-action').value = 'add_address';
+  document.getElementById('run-form').submit();
+}
+</script>
+{% endblock %}
