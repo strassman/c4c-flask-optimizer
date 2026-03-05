@@ -527,7 +527,9 @@ def delivery_run():
                     prox_routes.append({"volunteer":vol,"stops":clusters[vi],
                         "distance_miles":"—","road_geometry":None,
                         "color":COLORS[vi%len(COLORS)],"hex":HEX_COLORS[vi%len(HEX_COLORS)]})
-                session["prox"]   = {"volunteers":vr,"clusters":clusters,
+                # Convert clusters to list-of-lists for JSON compatibility
+                clusters_list = [clusters[i] for i in range(len(vr))]
+                session["prox"]   = {"volunteers":vr,"clusters":clusters_list,
                     "timestamp":datetime.now().strftime("%b %d, %Y at %I:%M %p")}
                 session["routes"] = prox_routes
                 return redirect(url_for("map_page"))
