@@ -15,8 +15,9 @@
     {% if not d.vols %}
     <div class="alert alert-info">Add volunteers first on the Volunteers page.</div>
     {% else %}
+    <input type="text" id="vol-search" placeholder="🔍 Filter volunteers..." oninput="filterVols(this.value)" style="margin-bottom:10px">
     {% for v in d.vols %}
-    <label style="display:flex;align-items:center;gap:10px;margin-top:10px;cursor:pointer;color:#ddd">
+    <label class="vol-item" style="display:flex;align-items:center;gap:10px;margin-top:8px;cursor:pointer;color:#ddd">
       <input type="checkbox" name="avail" value="{{ v.name }}" {% if v.name in avail %}checked{% endif %}>
       <span><strong>{{ v.name }}</strong><br><span style="color:#888;font-size:12px">{{ v.address }}</span></span>
     </label>
@@ -30,7 +31,11 @@
     {% if not d.addrs %}
     <div class="alert alert-info">Add constituents first.</div>
     {% else %}
-    <input type="text" id="addr-search" placeholder="🔍 Filter addresses..." oninput="filterAddrs(this.value)" style="margin-bottom:12px">
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <input type="text" id="addr-search" placeholder="🔍 Filter addresses..." oninput="filterAddrs(this.value)" style="flex:1;margin:0">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()" style="white-space:nowrap">Select All</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()" style="white-space:nowrap">Clear</button>
+    </div>
     <div id="addr-list" style="max-height:300px;overflow-y:auto">
     {% for a in d.addrs %}
     {% if a.status != 'delivered' %}
@@ -95,11 +100,27 @@
 </form>
 
 <script>
+function filterVols(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.vol-item').forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
 function filterAddrs(q) {
   q = q.toLowerCase();
   document.querySelectorAll('.addr-item').forEach(el => {
     el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
+}
+function selectAllAddrs() {
+  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb => {
+    if (cb.closest('.addr-item').style.display !== 'none') cb.checked = true;
+  });
+  updateCount();
+}
+function clearAllAddrs() {
+  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb => cb.checked = false);
+  updateCount();
 }
 function updateCount() {
   const checked = document.querySelectorAll('input[name="run_ids"]:checked').length;
