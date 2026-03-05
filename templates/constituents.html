@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% block title %}Constituents{% endblock %}
+{% block content %}
+<h1>🗳️ Constituents</h1>
+<p class="subtitle">{{ d.addrs|length }} total · {{ d.addrs|selectattr('status','ne','delivered')|list|length }} pending · {{ d.addrs|selectattr('status','equalto','delivered')|list|length }} placed</p>
+
+{% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>{% endif %}
+
+<details>
+  <summary>📂 Import from CSV</summary>
+  <div class="detail-body">
+    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have: address (or street_address), city, state, zip, first_name, last_name, phone, email</p>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="action" value="import_csv">
+      <input type="file" name="csv_file" accept=".csv" required>
+      <br><br><button class="btn btn-secondary" type="submit">📥 Import & Geocode</button>
+    </form>
+  </div>
+</details>
+
+<details>
+  <summary>➕ Add manually</summary>
+  <div class="detail-body">
+    <form method="POST">
+      <input type="hidden" name="action" value="add">
+      <div class="grid2">
+        <div>
+          <label>Street *</label><input type="text" name="street" placeholder="123 Oak St" required>
+          <label>Contact</label><input type="text" name="contact" placeholder="John Smith">
+          <label>Phone</label><input type="text" name="phone" placeholder="410-555-0100">
+        </div>
+        <div>
+          <div class="grid3">
+            <div><label>City *</label><input type="text" name="city" placeholder="Baltimore" required></div>
+            <div><label>State *</label><input type="text" name="state" placeholder="MD" required></div>
+            <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201" required></div>
+          </div>
+          <label>Email</label><input type="text" name="email" placeholder="john@email.com">
+          <label>Note</label><input type="text" name="note" placeholder="e.g. leave at side door">
+        </div>
+      </div>
+      <br><button class="btn btn-primary" type="submit">Add Address</button>
+    </form>
+  </div>
+</details>
+
+<hr class="divider">
+
+{% set pending = d.addrs|selectattr('status','ne','delivered')|list %}
+{% set delivered = d.addrs|selectattr('status','equalto','delivered')|list %}
+
+<!-- All addresses -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+  <h2 style="margin:0">📋 All Constituents — {{ d.addrs|length }}</h2>
+  <div style="display:flex;gap:8px">
+    {% if d.addrs %}
+    <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export CSV</a>
+    <form method="POST" onsubmit="return confirm('Delete ALL constituents?')" style="display:inline">
+      <input type="hidden" name="action" value="clear_all">
+      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if d.addrs %}
+<table class="tbl">
+  <thead><tr><th>Status</th><th>Address</th><th>Contact</th><th>Phone</th><th>Date</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for a in d.addrs %}
+  <tr>
+    <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
+    <td>{{ a.address }}</td>
+    <td>{{ a.contact or '—' }}</td>
+    <td>{{ a.phone or '—' }}</td>
+    <td>{{ a.delivered_date or '—' }}</td>
+    <td>{{ a.note or '—' }}</td>
+    <td style="white-space:nowrap">
+      {% if a.status != 'delivered' %}
+      <form method="POST" style="display:inline">
+        <input type="hidden" name="action" value="mark_delivered">
+        <input type="hidden" name="address" value="{{ a.address }}">
+        <button class="btn btn-success btn-sm" type="submit">✅</button>
+      </form>
+      {% else %}
+      <form method="POST" style="display:inline">
+        <input type="hidden" name="action" value="undo_delivery">
+        <input type="hidden" name="address" value="{{ a.address }}">
+        <button class="btn btn-secondary btn-sm" type="submit">↩️</button>
+      </form>
+      {% endif %}
+      <form method="POST" style="display:inline">
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="address" value="{{ a.address }}">
+        <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Delete?')">✕</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="alert alert-info">No constituents yet. Import from CSV or add manually above.</div>
+{% endif %}
+
+<hr class="divider">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+  <h2 style="margin:0">⏳ Pending — {{ pending|length }}</h2>
+  {% if pending %}
+  <form method="POST" onsubmit="return confirm('Clear all pending?')" style="display:inline">
+    <input type="hidden" name="action" value="clear_pending">
+    <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear Pending</button>
+  </form>
+  {% endif %}
+</div>
+{% if not pending %}<p style="color:#888;font-size:13px">No pending addresses.</p>{% endif %}
+
+<hr class="divider">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+  <h2 style="margin:0">✅ Signs Placed — {{ delivered|length }}</h2>
+  {% if delivered %}
+  <form method="POST" onsubmit="return confirm('Clear all delivered?')" style="display:inline">
+    <input type="hidden" name="action" value="clear_delivered">
+    <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear Delivered</button>
+  </form>
+  {% endif %}
+</div>
+{% if not delivered %}<p style="color:#888;font-size:13px">No signs placed yet.</p>{% endif %}
+
+{% endblock %}
