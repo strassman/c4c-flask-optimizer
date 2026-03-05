@@ -176,8 +176,9 @@ def gmaps_url(o, d):
 
 def gen_email(r, cname):
     v=r["volunteer"]; s=r["stops"]; mi=r.get("distance_miles","—")
+    mi_str = f" (~{mi} mi)" if mi != "—" else ""
     lines=[f"Hi {v['name']},",f"\nThank you for volunteering for {cname}!",
-           f"\nYou have {len(s)} stop{'s' if len(s)!=1 else ''} (~{mi} mi):\n"]
+           f"\nYou have {len(s)} stop{'s' if len(s)!=1 else ''}{mi_str}:\n"]
     for i,stop in enumerate(s):
         prev=v["address"] if i==0 else s[i-1]["address"]
         lines+=[f"  Stop {i+1}: {stop['address']}",f"  Directions: {gmaps_url(prev,stop['address'])}\n"]
@@ -532,6 +533,11 @@ def delivery_run():
                 session["prox"]   = {"volunteers":vr,"clusters":clusters_list,
                     "timestamp":datetime.now().strftime("%b %d, %Y at %I:%M %p")}
                 session["routes"] = prox_routes
+                # Save to history so Routes page shows it
+                rec = {"timestamp": datetime.now().strftime("%b %d, %Y at %I:%M %p") + " (proximity)",
+                       "routes": prox_routes}
+                d["history"] = [rec] + (d["history"] or [])
+                save_session("history", d["history"])
                 return redirect(url_for("map_page"))
         return redirect(url_for("delivery_run"))
 
