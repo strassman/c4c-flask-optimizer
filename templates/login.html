@@ -3,75 +3,130 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login — Campaign Route Optimizer</title>
+<title>RouteOps — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0f1117;color:#e0e0e0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.wrap{width:100%;max-width:420px;padding:24px}
-.logo{text-align:center;margin-bottom:28px}
-.logo h1{font-size:26px;font-weight:700;color:#fff}
-.logo p{color:#888;font-size:14px;margin-top:6px}
-.card{background:#1a1d27;border:1px solid #2d3148;border-radius:12px;padding:28px}
-.tabs{display:flex;border-bottom:1px solid #2d3148;margin-bottom:22px}
-.tab{flex:1;text-align:center;padding:10px;cursor:pointer;font-size:14px;color:#888;border-bottom:2px solid transparent;transition:color .15s}
-.tab.active{color:#4a9eff;border-bottom-color:#4a9eff}
-.tab-panel{display:none}.tab-panel.active{display:block}
-label{display:block;font-size:12px;font-weight:500;color:#aaa;margin-bottom:4px;margin-top:14px}
-label:first-child{margin-top:0}
-input{width:100%;padding:9px 12px;background:#0f1117;border:1px solid #3d4168;border-radius:6px;color:#e0e0e0;font-size:14px}
-input:focus{outline:none;border-color:#4a9eff}
-.btn{width:100%;padding:10px;background:#4a9eff;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;margin-top:18px}
-.btn:hover{background:#3a8eef}
-.alert{padding:10px 14px;border-radius:6px;font-size:13px;margin-bottom:16px;background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d}
+:root {
+  --bg: #080a0f; --surface: #0e1117; --surface2: #141822; --surface3: #1c2130;
+  --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+  --text: #f0f2f7; --text2: #8b92a5; --text3: #535a6b;
+  --accent: #4f8ef7; --green: #34c759; --red: #ff3b30;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  font-family: 'DM Sans', -apple-system, sans-serif;
+  background: var(--bg); color: var(--text);
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79,142,247,0.08), transparent);
+}
+.wrap { width: 100%; max-width: 400px; padding: 24px; }
+.logo { text-align: center; margin-bottom: 36px; }
+.logo-icon {
+  width: 52px; height: 52px;
+  background: var(--accent);
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+  font-size: 24px;
+  box-shadow: 0 8px 32px rgba(79,142,247,0.3);
+}
+.logo h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; color: var(--text); }
+.logo p { color: var(--text2); font-size: 13px; margin-top: 5px; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+}
+.tabs { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; margin-bottom: 24px; }
+.tab {
+  flex: 1; text-align: center; padding: 7px;
+  cursor: pointer; font-size: 13px; font-weight: 500;
+  color: var(--text2); border-radius: 7px;
+  transition: all .2s;
+}
+.tab.active { background: var(--surface3); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5px; margin-top: 14px; letter-spacing: 0.01em; }
+label:first-child { margin-top: 0; }
+input {
+  width: 100%; padding: 10px 13px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit;
+  outline: none; transition: border-color .15s, background .15s;
+}
+input:focus { border-color: var(--accent); background: var(--surface3); }
+input::placeholder { color: var(--text3); }
+.btn {
+  width: 100%; padding: 11px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 9px;
+  font-size: 14px; font-weight: 500; font-family: inherit;
+  cursor: pointer; margin-top: 20px;
+  transition: opacity .15s, transform .1s;
+  letter-spacing: 0.01em;
+}
+.btn:hover { opacity: .88; }
+.btn:active { transform: scale(.99); }
+.alert {
+  padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+  background: rgba(255,59,48,.1); color: #ff7b73; border: 1px solid rgba(255,59,48,.2);
+}
+.footer { text-align: center; margin-top: 20px; font-size: 12px; color: var(--text3); }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="logo">
-    <h1>🗺️ Route Optimizer</h1>
-    <p>Campaign yard sign delivery management</p>
+    <div class="logo-icon">⚡</div>
+    <h1>RouteOps</h1>
+    <p>Campaign delivery management</p>
   </div>
   <div class="card">
     {% if error %}<div class="alert">{{ error }}</div>{% endif %}
     <div class="tabs">
-      <div class="tab active" onclick="switchTab('login',this)">🔑 Log In</div>
-      <div class="tab" onclick="switchTab('signup',this)">✨ Sign Up</div>
+      <div class="tab active" id="tab-login" onclick="switchTab('login')">Sign In</div>
+      <div class="tab" id="tab-signup" onclick="switchTab('signup')">Create Account</div>
     </div>
     <div id="login" class="tab-panel active">
       <form method="POST">
         <input type="hidden" name="action" value="login">
-        <label>Email</label>
-        <input type="text" name="email" placeholder="you@campaign.com" required>
+        <label>Email address</label>
+        <input type="text" name="email" placeholder="you@campaign.com" autocomplete="email" required>
         <label>Password</label>
-        <input type="password" name="password" placeholder="••••••" required>
-        <button class="btn" type="submit">Log In</button>
+        <input type="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+        <button class="btn" type="submit">Sign In</button>
       </form>
     </div>
     <div id="signup" class="tab-panel">
       <form method="POST">
         <input type="hidden" name="action" value="signup">
-        <label>Campaign Name</label>
+        <label>Campaign name</label>
         <input type="text" name="cname" placeholder="Smith for State Senate" required>
-        <label>Email</label>
+        <label>Email address</label>
         <input type="text" name="email" placeholder="you@campaign.com" required>
         <label>Password</label>
-        <input type="password" name="password" placeholder="Min 6 characters" required>
-        <label>Confirm Password</label>
-        <input type="password" name="password2" placeholder="••••••" required>
+        <input type="password" name="password" placeholder="Minimum 6 characters" required>
+        <label>Confirm password</label>
+        <input type="password" name="password2" placeholder="••••••••" required>
         <button class="btn" type="submit">Create Account</button>
       </form>
     </div>
   </div>
+  <div class="footer">Secure · Private · Campaign-ready</div>
 </div>
 <script>
-function switchTab(id, el) {
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById(id).classList.add('active');
+function switchTab(id) {
+  ['login','signup'].forEach(t => {
+    document.getElementById(t).classList.toggle('active', t===id);
+    document.getElementById('tab-'+t).classList.toggle('active', t===id);
+  });
 }
-// Auto-switch to signup tab if error on signup
-{% if error and request.form.get('action')=='signup' %}switchTab('signup', document.querySelectorAll('.tab')[1]);{% endif %}
+{% if error and request.form.get('action')=='signup' %}switchTab('signup');{% endif %}
 </script>
 </body>
 </html>
