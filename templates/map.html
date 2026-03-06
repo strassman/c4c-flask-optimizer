@@ -4,152 +4,199 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-#map{height:calc(100vh - 160px);border-radius:10px;border:1px solid #2d3148}
+#map{height:calc(100vh - 200px);border-radius:10px;border:1px solid #2d3148}
 .map-legend{display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:13px;color:#aaa}
 .legend-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.view-btns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.view-btn{padding:6px 14px;border-radius:6px;border:1px solid #3d4168;background:#1a1d27;color:#aaa;cursor:pointer;font-size:13px;transition:all .15s}
+.view-btn:hover{background:#2d3148;color:#fff}
+.view-btn.active{background:#4a9eff;border-color:#4a9eff;color:#fff}
 </style>
 {% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-  <div>
-    <h1 style="margin-bottom:2px">🗺️ Map</h1>
-    {% if routes and not prox %}
-    <p class="subtitle" style="margin:0">Active delivery run — {{ routes|length }} volunteer{% if routes|length!=1%}s{% endif %}</p>
-    {% elif prox %}
-    <p class="subtitle" style="margin:0">Proximity clusters — {{ prox.timestamp }}</p>
-    {% else %}
-    <p class="subtitle" style="margin:0">All constituents</p>
-    {% endif %}
-  </div>
-  {% if routes or prox %}
-  <a href="/map/reset" class="btn btn-secondary btn-sm">🗺️ Show master map</a>
-  {% endif %}
-</div>
+<h1 style="margin-bottom:8px">🗺️ Map</h1>
 
-<div class="map-legend">
+<!-- View switcher -->
+<div class="view-btns">
   {% if routes and not prox %}
-    {% for r in routes %}
-    <div class="legend-item">
-      <span class="legend-dot" style="background:{{ r.hex }}"></span>
-      <strong>{{ r.volunteer.name }}</strong> — {{ r.stops|length }} stops · {{ r.distance_miles }} mi
-    </div>
-    {% endfor %}
+  <button class="view-btn active" onclick="showView('route')">📍 Active Routes</button>
   {% elif prox %}
-    {% for vol in prox.volunteers %}
-    <div class="legend-item">
-      <span class="legend-dot" style="background:{{ HEX_COLORS[loop.index0 % HEX_COLORS|length] }}"></span>
-      <strong>{{ vol.name }}</strong>
-    </div>
-    {% endfor %}
-  {% else %}
-    <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span> Sign placed</div>
-    <div class="legend-item"><span class="legend-dot" style="background:#888"></span> Pending</div>
+  <button class="view-btn active" onclick="showView('prox')">📅 Proximity Clusters</button>
+  {% endif %}
+  {% if d.history %}
+  <button class="view-btn" id="btn-pending" onclick="showView('pending')">⏳ Pending Assignments</button>
+  {% endif %}
+  <button class="view-btn {% if not routes and not prox %}active{% endif %}" onclick="showView('master')">🗺️ Master Map</button>
+  {% if routes or prox %}
+  <a href="/map/reset" class="view-btn" style="text-decoration:none">✕ Clear Routes</a>
   {% endif %}
 </div>
 
+<!-- Legend -->
+<div class="map-legend" id="legend"></div>
 <div id="map"></div>
 
 <script>
+const HEX_COLORS = {{ HEX_COLORS|tojson }};
+const routes     = {{ routes|tojson }};
+const prox       = {{ prox|tojson if prox else 'null' }};
+const allAddrs   = {{ d.addrs|tojson }};
+const doneKeys   = {{ done_keys|tojson if done_keys is defined else '[]' }};
+
 const map = L.map('map', {preferCanvas: true}).setView([39.2904, -76.6122], 11);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '©OpenStreetMap ©CartoDB', maxZoom: 19
 }).addTo(map);
 
-const bounds = [];
+let currentLayers = [];
+function clearLayers() {
+  currentLayers.forEach(l => map.removeLayer(l));
+  currentLayers = [];
+}
+function addLayer(l) { l.addTo(map); currentLayers.push(l); return l; }
+function fitBounds(pts) {
+  if (pts.length > 0) map.fitBounds(pts, {padding:[30,30]});
+}
+function setLegend(html) {
+  document.getElementById('legend').innerHTML = html;
+}
+function setActiveBtn(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn-'+view);
+  if (btn) btn.classList.add('active');
+}
 
-{% if routes and not prox %}
-// ── Active route map ──────────────────────────────────────────────────────────
-const routes = {{ routes|tojson }};
-routes.forEach((r, ri) => {
-  const vol = r.volunteer;
-  const hex = r.hex;
-  if (!vol.lat) return;
-  bounds.push([vol.lat, vol.lng]);
+function showView(view) {
+  clearLayers();
+  const bounds = [];
 
-  // Volunteer home
-  L.marker([vol.lat, vol.lng], {
-    icon: L.divIcon({
-      html: `<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.5)">🏠</div>`,
-      iconSize:[28,28], iconAnchor:[14,14], className:''
-    })
-  }).addTo(map).bindPopup(`<b>Home: ${vol.name}</b><br>${vol.address}`);
+  if (view === 'route' && routes.length) {
+    setActiveBtn('route');
+    let legendHtml = '';
+    routes.forEach((r, ri) => {
+      const vol = r.volunteer; const hex = r.hex;
+      if (!vol.lat) return;
+      bounds.push([vol.lat, vol.lng]);
+      legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong> — ${r.stops.length} stops${r.distance_miles !== '—' ? ' · '+r.distance_miles+' mi' : ''}</div>`;
+      addLayer(L.marker([vol.lat,vol.lng], {icon: L.divIcon({
+        html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.5)">🏠</div>`,
+        iconSize:[28,28],iconAnchor:[14,14],className:''
+      })}).bindPopup(`<b>Home: ${vol.name}</b><br>${vol.address}`));
+      if (r.road_geometry && r.road_geometry.length)
+        addLayer(L.polyline(r.road_geometry, {color:hex,weight:4,opacity:.8}).bindTooltip(`${vol.name}`));
+      r.stops.forEach((s,i) => {
+        if (!s.lat) return;
+        bounds.push([s.lat,s.lng]);
+        const done = doneKeys.includes(vol.name+'_'+i);
+        if (done) {
+          addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({html:`<div style="background:#22c55e;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>`,iconSize:[24,24],iconAnchor:[12,12],className:''})}).bindPopup(`<b>✅ ${s.address}</b>`));
+        } else {
+          addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({html:`<div style="background:white;color:${hex};border:2px solid ${hex};border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],className:''})}).bindPopup(`<b>Stop ${i+1} — ${vol.name}</b><br>${s.address}`));
+        }
+      });
+    });
+    setLegend(legendHtml);
 
-  // Route line
-  if (r.road_geometry && r.road_geometry.length) {
-    L.polyline(r.road_geometry, {color: hex, weight: 4, opacity: 0.8}).addTo(map)
-     .bindTooltip(`${vol.name}: ${r.distance_miles} mi`);
-  }
-
-  // Stops
-  r.stops.forEach((s, i) => {
-    if (!s.lat) return;
-    bounds.push([s.lat, s.lng]);
-    const done = {{ (done_keys|tojson if done_keys is defined else '[]') }}.includes(vol.name+'_'+i);
-    if (done) {
-      L.marker([s.lat, s.lng], {
-        icon: L.divIcon({
-          html: `<div style="background:#22c55e;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 2px 4px rgba(0,0,0,.4)">✓</div>`,
-          iconSize:[24,24], iconAnchor:[12,12], className:''
-        })
-      }).addTo(map).bindPopup(`<b>✅ ${s.address}</b>`);
+  } else if (view === 'pending') {
+    setActiveBtn('pending');
+    let legendHtml = '';
+    let pendingCount = 0;
+    const allPending = {{ all_pending_routes|tojson }};
+    allPending.forEach((r) => {
+      const vol = r.volunteer; const hex = r.hex;
+      if (!vol.lat) return;
+      let volPending = 0;
+      r.stops_with_index.forEach((si) => {
+        const s = si.stop; const i = si.index;
+        if (!s.lat) return;
+        volPending++; pendingCount++;
+        bounds.push([s.lat, s.lng]);
+        const contact = s.contact ? `<br>👤 ${s.contact}` : '';
+        const phone   = s.phone   ? `<br>📞 ${s.phone}`   : '';
+        const note    = s.note    ? `<br>📝 ${s.note}`     : '';
+        const dir     = `https://www.google.com/maps/dir/${encodeURIComponent(vol.address)}/${encodeURIComponent(s.address)}`;
+        addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({
+          html:`<div style="background:${hex};color:white;border:2px solid white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 2px 5px rgba(0,0,0,.4)">${i+1}</div>`,
+          iconSize:[28,28],iconAnchor:[14,14],className:''
+        })}).bindPopup(`
+          <b>Stop ${i+1} — ⏳ Pending</b><br>
+          ${s.address}${contact}${phone}${note}<br>
+          <b style="color:${hex}">👤 Assigned: ${vol.name}</b><br>
+          <a href="${dir}" target="_blank">📍 Directions</a>
+        `, {maxWidth:260}));
+      });
+      if (volPending > 0) {
+        legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong> — ${volPending} pending</div>`;
+        if (vol.lat) {
+          bounds.push([vol.lat, vol.lng]);
+          addLayer(L.marker([vol.lat,vol.lng], {icon:L.divIcon({
+            html:`<div style="background:${hex};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:.7;">🏠</div>`,
+            iconSize:[24,24],iconAnchor:[12,12],className:''
+          })}).bindPopup(`<b>${vol.name}</b>`));
+        }
+      }
+    });
+    if (pendingCount === 0) {
+      setLegend('<span style="color:#22c55e">✅ All stops completed!</span>');
     } else {
-      L.marker([s.lat, s.lng], {
-        icon: L.divIcon({
-          html: `<div style="background:white;color:${hex};border:2px solid ${hex};border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 2px 4px rgba(0,0,0,.3)">${i+1}</div>`,
-          iconSize:[26,26], iconAnchor:[13,13], className:''
-        })
-      }).addTo(map).bindPopup(`<b>Stop ${i+1} — ${vol.name}</b><br>${s.address}`);
+      setLegend(legendHtml + `<div class="legend-item" style="margin-left:auto"><span style="color:#f59e0b;font-weight:600">${pendingCount} pending total</span></div>`);
     }
-  });
-});
 
-{% elif prox %}
-// ── Proximity cluster map ─────────────────────────────────────────────────────
-const prox = {{ prox|tojson }};
-const hexColors = {{ HEX_COLORS|tojson }};
-prox.volunteers.forEach((vol, vi) => {
-  if (!vol.lat) return;
-  const hex = hexColors[vi % hexColors.length];
-  bounds.push([vol.lat, vol.lng]);
-  L.marker([vol.lat, vol.lng], {
-    icon: L.divIcon({
-      html: `<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.5)">🏠</div>`,
-      iconSize:[28,28], iconAnchor:[14,14], className:''
-    })
-  }).addTo(map).bindPopup(`<b>${vol.name}</b><br>${prox.clusters[vi].length} stops nearby`);
+  } else if (view === 'prox' && prox) {
+    setActiveBtn('prox');
+    let legendHtml = '';
+    prox.volunteers.forEach((vol, vi) => {
+      if (!vol.lat) return;
+      const hex = HEX_COLORS[vi % HEX_COLORS.length];
+      bounds.push([vol.lat,vol.lng]);
+      legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong></div>`;
+      addLayer(L.marker([vol.lat,vol.lng], {icon:L.divIcon({html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">🏠</div>`,iconSize:[28,28],iconAnchor:[14,14],className:''})}).bindPopup(`<b>${vol.name}</b>`));
+      (prox.clusters[vi]||[]).forEach(s => {
+        if (!s.lat) return;
+        bounds.push([s.lat,s.lng]);
+        addLayer(L.circleMarker([s.lat,s.lng],{radius:9,color:hex,fillColor:hex,fillOpacity:.7,weight:2}).bindPopup(`<b>${s.address}</b><br>→ ${vol.name}`));
+        addLayer(L.polyline([[vol.lat,vol.lng],[s.lat,s.lng]],{color:hex,weight:1.5,opacity:.3,dashArray:'6'}));
+      });
+    });
+    setLegend(legendHtml);
 
-  (prox.clusters[vi] || []).forEach(s => {
-    if (!s.lat) return;
-    bounds.push([s.lat, s.lng]);
-    L.circleMarker([s.lat, s.lng], {radius:9, color:hex, fillColor:hex, fillOpacity:0.7, weight:2})
-     .addTo(map).bindPopup(`<b>${s.address}</b><br>→ ${vol.name}`);
-    L.polyline([[vol.lat,vol.lng],[s.lat,s.lng]], {color:hex, weight:1.5, opacity:0.3, dashArray:'6'}).addTo(map);
-  });
-});
-
-{% else %}
-// ── Master map ────────────────────────────────────────────────────────────────
-const addrs = {{ d.addrs|tojson }};
-addrs.forEach(a => {
-  if (!a.lat) return;
-  bounds.push([a.lat, a.lng]);
-  if (a.status === 'delivered') {
-    L.marker([a.lat, a.lng], {
-      icon: L.divIcon({
-        html: `<div style="background:#22c55e;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;box-shadow:0 2px 4px rgba(0,0,0,.4)">✓</div>`,
-        iconSize:[22,22], iconAnchor:[11,11], className:''
-      })
-    }).addTo(map).bindPopup(`<b>✅ ${a.address}</b><br>${a.delivered_date||''}`);
   } else {
-    L.circleMarker([a.lat, a.lng], {radius:8, color:'#888', fillColor:'#bbb', fillOpacity:0.85, weight:2})
-     .addTo(map).bindPopup(`<b>⏳ ${a.address}</b>`);
+    // Master map
+    setActiveBtn('master');
+    allAddrs.forEach(a => {
+      if (!a.lat) return;
+      bounds.push([a.lat,a.lng]);
+      if (a.status === 'delivered') {
+        addLayer(L.marker([a.lat,a.lng], {icon:L.divIcon({html:`<div style="background:#22c55e;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;">✓</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''})}).bindPopup(`<b>✅ ${a.address}</b><br>${a.delivered_date||''}`));
+      } else {
+        addLayer(L.circleMarker([a.lat,a.lng],{radius:8,color:'#888',fillColor:'#bbb',fillOpacity:.85,weight:2}).bindPopup(`<b>⏳ ${a.address}</b>`));
+      }
+    });
+    setLegend('<div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Sign placed</div><div class="legend-item"><span class="legend-dot" style="background:#888"></span>Pending</div>');
   }
-});
+
+  fitBounds(bounds);
+}
+
+// Auto-show best default view on load
+{% if routes and not prox %}
+showView('route');
+document.getElementById('btn-route') && document.getElementById('btn-route').classList.add('active');
+{% elif prox %}
+showView('prox');
+{% else %}
+showView('master');
 {% endif %}
 
-if (bounds.length > 0) {
-  map.fitBounds(bounds, {padding: [30, 30]});
-}
+// Add IDs to buttons for active state management
+document.querySelectorAll('.view-btn').forEach(b => {
+  if (!b.id) {
+    const txt = b.textContent.trim();
+    if (txt.includes('Active Routes')) b.id = 'btn-route';
+    else if (txt.includes('Proximity')) b.id = 'btn-prox';
+    else if (txt.includes('Master')) b.id = 'btn-master';
+  }
+});
 </script>
 {% endblock %}
