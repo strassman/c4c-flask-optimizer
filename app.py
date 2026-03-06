@@ -1021,22 +1021,6 @@ def delivery_run():
             runs = d.get("runs", [])
             runs.insert(0, new_run)
             save_session("runs", runs)
-            # ── Token index ────────────────────────────────────────────
-def save_token_index(run: dict):
-    try:
-        idx = {}
-        for vt in run.get("vol_tokens", []):
-            idx[vt["token"]] = {
-                "cid":      run["cid"],
-                "run_id":   run["id"],
-                "vol_name": vt["vol_name"],
-            }
-        db().table("campaign_data").upsert({
-            "id":   f"token_index_{run['id']}",
-            "data": idx,
-        }).execute()
-    except Exception as e:
-        print(f"save_token_index error: {e}", flush=True)
             save_token_index(new_run)
             # Also keep history for backwards compat
             rec = {"timestamp": ts + (" (proximity)" if run_type=="proximity" else ""), "routes": routes}
@@ -1290,19 +1274,44 @@ def export_csv():
 SUPABASE_BUCKET = "sign-photos"
 
 def get_run_by_token(run_id: str, vol_token: str):
-    """Load a run and verify the vol_token matches. Returns (cid, run) or (None, None)."""
+    """
+    Look up a run by vol token. Uses fast index first, falls back to full scan.
+    Returns (cid, run, vol_name) or (None, None, None).
+    """
+    # Fast path: token index
     try:
-        rows = db().table("campaign_data").select("id,data")                    .like("id", "%_runs").execute().data
-        for row in rows:
-            cid = row["id"].replace("_runs","")
-            for run in (row["data"] or []):
-                if run.get("id") == run_id:
-                    # find matching volunteer token
-                    for vt in run.get("vol_tokens", []):
-                        if vt.get("token") == vol_token:
-                            return cid, run, vt.get("vol_name")
+        idx_rows = db().table("campaign_data").select("data") \
+                       .eq("id", f"token_index_{run_id}").execute().data
+        if idx_rows and idx_rows[0]["data"]:
+            entry = idx_rows[0]["data"].get(vol_token)
+            if entry:
+                cid = entry["cid"]
+                run_rows = db().table("campaign_data").select("data") \
+                               .eq("id", f"{cid}_runs").execute().data
+                runs = run_rows[0]["data"] if run_rows else []
+                run  = next((r for r in runs if r["id"] == run_id), None)
+                if run:
+                    return cid, run, entry["vol_name"]
     except Exception as e:
-        print(f"get_run_by_token error: {e}", flush=True)
+        print(f"get_run_by_token fast path error: {e}", flush=True)
+
+    # Slow fallback: scan all campaign run lists (works for old runs)
+    try:
+        rows = db().table("campaign_data").select("id,data") \
+                   .like("id", "%_runs").execute().data
+        for row in rows:
+            if not row["id"].endswith("_runs"):
+                continue
+            cid = row["id"][:-5]
+            for run in (row["data"] or []):
+                if run.get("id") != run_id:
+                    continue
+                for vt in run.get("vol_tokens", []):
+                    if vt.get("token") == vol_token:
+                        return cid, run, vt.get("vol_name")
+    except Exception as e:
+        print(f"get_run_by_token slow path error: {e}", flush=True)
+
     return None, None, None
 
 def upload_photo(cid: str, run_id: str, stop_key: str, file_bytes: bytes, mime: str) -> str:
@@ -1479,7 +1488,25 @@ def vol_deliver_progress(run_id, vol_token):
     return jsonify({"done": done_ct, "total": total, "pct": round(done_ct/total*100) if total else 0})
 
 
-# ── Generate vol tokens when a run is created ──────────────────────────────────
+# ── Token index + vol token helpers ───────────────────────────────────────────
+def save_token_index(run: dict):
+    """Write a fast-lookup index mapping each vol token → {cid, run_id, vol_name}."""
+    try:
+        idx = {}
+        for vt in run.get("vol_tokens", []):
+            idx[vt["token"]] = {
+                "cid":      run["cid"],
+                "run_id":   run["id"],
+                "vol_name": vt["vol_name"],
+            }
+        db().table("campaign_data").upsert({
+            "id":   f"token_index_{run['id']}",
+            "data": idx,
+        }).execute()
+    except Exception as e:
+        print(f"save_token_index error: {e}", flush=True)
+
+
 def attach_vol_tokens(run: dict) -> dict:
     """Add a unique share token for each volunteer in a run."""
     tokens = []
