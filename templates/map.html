@@ -204,6 +204,14 @@
       <span class="map-nav-badge gray">{{ d.addrs|length }}</span>
     </button>
 
+    <button class="map-nav-btn" id="nav-missing" onclick="switchMap('missing')">
+      <div class="map-nav-icon" style="background:rgba(255,59,48,.15)">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ff3b30" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><line x1="10" y1="6" x2="10" y2="9"/><circle cx="10" cy="11.5" r=".8" fill="#ff3b30"/></svg>
+      </div>
+      Missing / Stolen
+      <span class="map-nav-badge" id="missing-badge" style="background:var(--red)">{{ d.addrs|selectattr('missing','equalto',true)|list|length }}</span>
+    </button>
+
     <div class="sidebar-divider"></div>
     <div class="sidebar-section-label">Coming Soon</div>
 
@@ -369,6 +377,7 @@ function switchMap(id){
     routes:  ['Active Routes',  activeRun ? 'Viewing: '+activeRun.name : 'Select a run from the drawer'],
     pending: ['Pending Stops',  'All unfinished stops across active runs'],
     master:  ['All Constituents', allAddrs.length+' addresses on file'],
+    missing: ['Missing / Stolen Signs', missingAddrs.length+' reported missing'],
   };
   document.getElementById('map-title').textContent    = titles[id][0];
   document.getElementById('map-subtitle').textContent = titles[id][1];
@@ -473,6 +482,9 @@ function renderMap(view){
   setLegend(legend);
   fitBounds(bounds);
 }
+
+// ── Missing signs ──────────────────────────────────────────
+const missingAddrs = allAddrs.filter(a => a.missing);
 
 // ── Init ───────────────────────────────────────────────────
 switchMap(activeRun ? 'routes' : 'master');
