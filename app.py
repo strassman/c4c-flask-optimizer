@@ -543,7 +543,15 @@ def delivery_run():
         return redirect(url_for("delivery_run"))
 
     avail = session.get("avail", [])
-    return render_template("delivery_run.html", d=d, msg=msg, avail=avail)
+    # Pass address coords for proximity sorting in JS
+    addr_coords = [{"id": a["id"], "lat": a.get("lat"), "lng": a.get("lng")}
+                   for a in d["addrs"] if a.get("lat")]
+    # Pass vol coords for sorting too
+    for v in d["vols"]:
+        if not v.get("lat"):
+            lat, lng = geocode(v["address"])
+            if lat: v["lat"] = lat; v["lng"] = lng
+    return render_template("delivery_run.html", d=d, msg=msg, avail=avail, addr_coords=addr_coords)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAP
