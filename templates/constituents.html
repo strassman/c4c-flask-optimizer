@@ -277,7 +277,13 @@
       <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
       <td>{{ a.delivered_date or '—' }}</td>
       <td style="color:var(--text3)">{{ a.note or '—' }}</td>
-      <td onclick="event.stopPropagation()">
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
+        {% if a.missing %}
+        <span style="color:var(--red);font-size:12px;font-weight:600;margin-right:6px">🚨 Missing</span>
+        <form method="POST" action="/constituents/unflag_missing" style="display:inline"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">✓ Found</button></form>
+        {% else %}
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openMissingModal('{{ a.address }}')" title="Report missing">🚨</button>
+        {% endif %}
         <form method="POST" style="display:inline"><input type="hidden" name="action" value="undo_delivery"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">↩️</button></form>
         <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
       </td>
@@ -287,6 +293,28 @@
   </table>
 </div>
 {% else %}<p style="color:var(--text3);font-size:13px">No signs placed yet.</p>{% endif %}
+
+<!-- Missing sign modal -->
+<div class="modal-overlay hidden" id="missing-modal" onclick="if(event.target===this)closeMissing()">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <h2>🚨 Report Missing Sign</h2>
+      <div class="modal-close" onclick="closeMissing()">✕</div>
+    </div>
+    <div class="modal-body">
+      <form method="POST" action="/constituents/flag_missing">
+        <input type="hidden" name="address" id="missing-addr">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px" id="missing-addr-display"></p>
+        <label>Note (optional)</label>
+        <input type="text" name="missing_note" placeholder="e.g. stolen overnight, damaged by car...">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+          <button type="button" class="btn btn-secondary" onclick="closeMissing()">Cancel</button>
+          <button type="submit" class="btn btn-danger">Report Missing</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 
 <!-- ══ VOTER PROFILE MODAL ══ -->
@@ -483,6 +511,16 @@ function closeVoter() {
   document.getElementById('voter-modal').classList.add('hidden');
   document.body.style.overflow = '';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoter(); });
+function openMissingModal(addr) {
+  document.getElementById('missing-addr').value = addr;
+  document.getElementById('missing-addr-display').textContent = addr;
+  document.getElementById('missing-modal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+function closeMissing() {
+  document.getElementById('missing-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeVoter(); closeMissing(); } });
 </script>
 {% endblock %}
