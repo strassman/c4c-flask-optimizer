@@ -15,7 +15,15 @@
 {% set pending = d.addrs|selectattr('status','ne','delivered')|list %}
 {% set delivered = d.addrs|selectattr('status','equalto','delivered')|list %}
 {% set sign_req = d.addrs|selectattr('sign_requested','equalto',true)|list %}
-<p class="subtitle">{{ d.addrs|length }} total · {{ pending|length }} pending · {{ delivered|length }} placed · {{ sign_req|length }} sign requests</p>
+<p class="subtitle">{{ d.addrs|length }} total · {{ pending|length }} pending · {{ delivered|length }} placed</p>
+{% if d.addrs %}
+<div class="stat-row">
+  <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value blue">{{ d.addrs|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value orange">{{ pending|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value green">{{ delivered|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">Sign Requests</div><div class="stat-value">{{ sign_req|length }}</div></div>
+</div>
+{% endif %}
 
 {% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>{% endif %}
 
