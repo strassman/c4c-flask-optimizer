@@ -150,18 +150,31 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def get_cache_bust(cid):
+    """Get the latest cache bust timestamp from DB."""
+    try:
+        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_cache_bust").execute().data
+        return rows[0]["data"].get("t","") if rows else ""
+    except:
+        return ""
+
 def get_data():
-    """Get campaign data from session cache."""
+    """Get campaign data from session cache, reloading if vols have made updates."""
     cid = session["cid"]
-    if session.get("loaded_for") != cid:
+    # Always check if a volunteer has busted the cache since last load
+    current_bust = get_cache_bust(cid)
+    cache_stale  = (session.get("loaded_for") != cid or
+                    session.get("cache_bust_ts","") != current_bust)
+    if cache_stale:
         d = load_all(cid)
-        session["vols"]    = d["vols"]    or []
-        session["addrs"]   = d["addrs"]   or []
-        session["run_ids"] = d["run_ids"] or []
-        session["done"]    = d["done"]    or []
-        session["history"] = d["history"] or []
-        session["runs"]    = d["runs"]    or []
-        session["loaded_for"] = cid
+        session["vols"]          = d["vols"]    or []
+        session["addrs"]         = d["addrs"]   or []
+        session["run_ids"]       = d["run_ids"] or []
+        session["done"]          = d["done"]    or []
+        session["history"]       = d["history"] or []
+        session["runs"]          = d["runs"]    or []
+        session["loaded_for"]    = cid
+        session["cache_bust_ts"] = current_bust
     return {
         "vols":    session.get("vols", []),
         "addrs":   session.get("addrs", []),
@@ -1411,6 +1424,8 @@ def vol_deliver(run_id, vol_token):
                                 a["delivered_by"] = vol_name
                         db().table("campaign_data").upsert({"id": f"{cid}_runs",  "data": runs}).execute()
                         db().table("campaign_data").upsert({"id": f"{cid}_addrs", "data": addrs}).execute()
+                        # Bust session cache so campaign dashboard sees update immediately
+                        db().table("campaign_data").upsert({"id": f"{cid}_cache_bust", "data": {"t": datetime.now().isoformat()}}).execute()
                         break
             except Exception as e:
                 print(f"vol mark_done error: {e}", flush=True)
@@ -1457,24 +1472,25 @@ def vol_deliver(run_id, vol_token):
 
         return redirect(url_for("vol_deliver", run_id=run_id, vol_token=vol_token))
 
-    # Reload updated state
+    # Reload fresh run state from Supabase (always — never use stale cache)
     try:
-        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_runs").execute().data
         runs = rows[0]["data"] if rows else []
         run  = next((r for r in runs if r["id"] == run_id), run)
-    except:
-        pass
+        # Also reload vol_route from fresh run in case stops changed
+        fresh_route = next((r for r in run.get("routes", []) if r["volunteer"]["name"] == vol_name), None)
+        if fresh_route:
+            vol_route = fresh_route
+    except Exception as e:
+        print(f"vol_deliver reload error: {e}", flush=True)
 
-    done_set  = set(run.get("done_keys", []))
-    photos    = get_photos(cid)
-    photo_map = {p["stop_key"]: p for p in photos if p.get("run_id") == run_id}
-    total     = len(vol_route["stops"])
-    done_ct   = sum(1 for i in range(total)
-                    if f"{vol_name}_{i}" in done_set)
+    done_set = set(run.get("done_keys", []))
+    total    = len(vol_route["stops"])
+    done_ct  = sum(1 for i in range(total) if f"{vol_name}_{i}" in done_set)
 
     return render_template("deliver.html",
                            run=run, vol_route=vol_route, vol_name=vol_name,
-                           done_set=done_set, photo_map=photo_map,
+                           done_set=done_set,
                            total=total, done_ct=done_ct,
                            run_id=run_id, vol_token=vol_token)
 
