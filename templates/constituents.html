@@ -66,14 +66,7 @@
 <!-- ══ SIGN REQUESTS ══ -->
 <div class="section-header">
   <h2 style="margin:0">🪧 Sign Requests — {{ sign_req|length }}</h2>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if sign_req %}
-    {% set sr_emails = [] %}{% set sr_phones = [] %}
-    {% for a in sign_req %}{% if a.email %}{% set _ = sr_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = sr_phones.append(a.phone) %}{% endif %}{% endfor %}
-    {% if sr_emails %}<a href="mailto:{{ sr_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
-    {% if sr_phones %}<a href="sms:{{ sr_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
-    {% endif %}
-  </div>
+  <div></div>
 </div>
 {% if sign_req %}
 <div class="search-bar">
@@ -186,13 +179,10 @@
 <hr class="divider">
 
 <!-- ══ PENDING ══ -->
-{% set pend_emails = [] %}{% set pend_phones = [] %}
-{% for a in pending %}{% if a.email %}{% set _ = pend_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = pend_phones.append(a.phone) %}{% endif %}{% endfor %}
+
 <div class="section-header">
   <h2 style="margin:0">⏳ Pending — {{ pending|length }}</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if pend_emails %}<a href="mailto:{{ pend_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
-    {% if pend_phones %}<a href="sms:{{ pend_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
     {% if pending %}
     <form method="POST" onsubmit="return confirm('Clear all pending?')" style="display:inline">
       <input type="hidden" name="action" value="clear_pending">
@@ -242,13 +232,10 @@
 <hr class="divider">
 
 <!-- ══ PLACED ══ -->
-{% set del_emails = [] %}{% set del_phones = [] %}
-{% for a in delivered %}{% if a.email %}{% set _ = del_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = del_phones.append(a.phone) %}{% endif %}{% endfor %}
+
 <div class="section-header">
   <h2 style="margin:0">✅ Signs Placed — {{ delivered|length }}</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if del_emails %}<a href="mailto:{{ del_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
-    {% if del_phones %}<a href="sms:{{ del_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
     {% if delivered %}
     <form method="POST" onsubmit="return confirm('Clear all delivered?')" style="display:inline">
       <input type="hidden" name="action" value="clear_delivered">
