@@ -1,77 +1,216 @@
 {% extends "base.html" %}
 {% block title %}Routes{% endblock %}
-{% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-  <h1 style="margin:0">📍 Route History</h1>
-  <a href="/routes/search" class="btn btn-secondary btn-sm">🔍 Search Routes</a>
-</div>
-<p class="subtitle">Check off stops as you go</p>
+{% block extra_head %}
+<style>
+.runs-sidebar {
+  display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start;
+}
+@media(max-width:768px){ .runs-sidebar { grid-template-columns: 1fr; } }
 
-{% if not d.history %}
-<div class="alert alert-info">No routes yet. Run the optimizer on the 🚐 Delivery Run page.</div>
+.run-list-item {
+  padding: 12px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 6px;
+  cursor: pointer; transition: all .15s; background: var(--surface);
+  display: block; text-decoration: none;
+}
+.run-list-item:hover { border-color: var(--border2); background: var(--surface2); text-decoration: none; }
+.run-list-item.active { border-color: var(--accent); background: rgba(79,142,247,.08); }
+.run-list-item.complete { opacity: .55; }
+
+.run-dot { width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0 }
+.dot-active { background:var(--green);box-shadow:0 0 5px var(--green) }
+.dot-complete { background:var(--text3) }
+
+.prog { height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;margin-top:6px }
+.prog-fill { height:100%;border-radius:2px }
+
+.stop-row {
+  display:flex;align-items:flex-start;gap:12px;
+  padding:10px 0;border-bottom:1px solid var(--border);
+}
+.stop-row:last-child { border-bottom:none }
+.stop-num {
+  width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px;
+}
+.rename-form { display:none;gap:8px;margin-top:8px }
+.rename-form.show { display:flex }
+</style>
+{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h1 style="margin-bottom:2px">Delivery Runs</h1>
+    <p class="subtitle" style="margin:0">
+      {{ runs|selectattr('status','equalto','active')|list|length }} active ·
+      {{ runs|selectattr('status','equalto','complete')|list|length }} complete
+    </p>
+  </div>
+  <a href="/routes/search" class="btn btn-secondary btn-sm">
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="5"/><line x1="14" y1="14" x2="18" y2="18"/></svg>
+    Search Runs
+  </a>
+</div>
+
+{% if not runs %}
+<div class="alert alert-info">No runs yet. Go to Delivery Run to create your first optimized route.</div>
 {% else %}
-{% for rec in d.history %}
-{% set rec_index = loop.index0 %}
-<div class="card" style="{% if rec_index==0 %}border-color:#4a9eff{% endif %}">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <div>
-      <strong style="font-size:15px">📅 {{ rec.timestamp }}</strong>
-      {% if rec_index==0 %}<span class="badge badge-green" style="margin-left:8px">Most Recent</span>{% endif %}
+<div class="runs-sidebar">
+
+  <!-- Left: run list -->
+  <div>
+    <div style="margin-bottom:10px">
+      <input type="text" placeholder="Filter runs..." oninput="filterRunList(this.value)" style="margin:0">
     </div>
-    <form method="POST" onsubmit="return confirm('Delete this run from history?')">
-      <input type="hidden" name="action" value="delete_run">
-      <input type="hidden" name="run_index" value="{{ rec_index }}">
-      <button class="btn btn-danger btn-sm" type="submit">🗑️ Delete Run</button>
-    </form>
+    <div id="run-list">
+    {% for run in runs %}
+    {% set pct = run.pct if run.pct is defined else 0 %}
+    {% set done_ct = run.done_count if run.done_count is defined else 0 %}
+    <a href="/routes?run_id={{ run.id }}"
+       class="run-list-item {% if selected_run and run.id==selected_run.id %}active{% endif %} {% if run.status=='complete' %}complete{% endif %}"
+       data-search="{{ run.name|lower }} {{ run.timestamp|lower }} {{ run.vol_names|join(' ')|lower }}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>{{ run.name }}
+        </span>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">{{ pct }}%</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">{{ run.timestamp[:18] if run.timestamp else '' }} · {{ run.type }}</div>
+      <div class="prog"><div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
+    </a>
+    {% endfor %}
+    </div>
   </div>
 
-  {% for r in rec.routes %}
+  <!-- Right: selected run detail -->
+  <div>
+  {% if selected_run %}
+  {% set run = selected_run %}
+  {% set done_set = run.done_keys if run.done_keys else [] %}
+  {% set pct = run.pct if run.pct is defined else 0 %}
+  {% set done_ct = run.done_count if run.done_count is defined else 0 %}
+
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>
+          <strong style="font-size:16px;letter-spacing:-0.02em" id="run-name-display">{{ run.name }}</strong>
+          <button onclick="toggleRename()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px;font-family:inherit" title="Rename">✏️</button>
+        </div>
+        <div class="rename-form" id="rename-form">
+          <form method="POST" style="display:flex;gap:6px;flex:1">
+            <input type="hidden" name="action" value="rename_run">
+            <input type="hidden" name="run_id" value="{{ run.id }}">
+            <input type="text" name="new_name" value="{{ run.name }}" style="flex:1;margin:0">
+            <button class="btn btn-primary btn-sm" type="submit">Save</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleRename()">Cancel</button>
+          </form>
+        </div>
+        <div style="font-size:12px;color:var(--text3)">{{ run.timestamp }} · {{ run.type }} · {{ run.routes|length }} volunteer{% if run.routes|length!=1%}s{% endif %} · {{ run.total_stops }} stops</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <a href="/map/select/{{ run.id }}" class="btn btn-primary btn-sm">🗺 View on Map</a>
+        {% if run.status=='active' %}
+        <form method="POST" style="display:inline">
+          <input type="hidden" name="action" value="close_run">
+          <input type="hidden" name="run_id" value="{{ run.id }}">
+          <button class="btn btn-secondary btn-sm" type="submit">✓ Mark Complete</button>
+        </form>
+        {% else %}
+        <form method="POST" style="display:inline">
+          <input type="hidden" name="action" value="reopen_run">
+          <input type="hidden" name="run_id" value="{{ run.id }}">
+          <button class="btn btn-secondary btn-sm" type="submit">↩ Reopen</button>
+        </form>
+        {% endif %}
+        <form method="POST" onsubmit="return confirm('Delete this run?')" style="display:inline">
+          <input type="hidden" name="action" value="delete_run">
+          <input type="hidden" name="run_id" value="{{ run.id }}">
+          <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="margin-top:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px">
+        <span>{{ done_ct }} of {{ run.total_stops }} stops completed</span>
+        <span style="font-weight:600;color:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}">{{ pct }}%</span>
+      </div>
+      <div class="prog" style="height:6px">
+        <div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stops by volunteer -->
+  {% for r in run.routes %}
   {% set vol = r.volunteer %}
-  <details {% if rec_index==0 %}open{% endif %} style="margin-bottom:8px">
-    <summary>
-      <span style="color:{{ r.hex }}">●</span>
-      <strong>{{ vol.name }}</strong> — {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %}{% if r.distance_miles != '—' %} · {{ r.distance_miles }} mi{% endif %}
+  <details open style="margin-bottom:10px">
+    <summary style="padding:13px 18px">
+      <span style="width:10px;height:10px;border-radius:50%;background:{{ r.hex }};display:inline-block;margin-right:8px;flex-shrink:0"></span>
+      <strong>{{ vol.name }}</strong>
+      <span style="color:var(--text3);font-size:12px;margin-left:8px">
+        {{ r.stops|length }} stop{% if r.stops|length!=1%}s{% endif %}{% if r.distance_miles != '—' %} · {{ r.distance_miles }} mi{% endif %}
+      </span>
     </summary>
     <div class="detail-body">
     {% for s in r.stops %}
     {% set key = vol.name + '_' + loop.index0|string %}
-    {% set is_done = key in done %}
-    <div class="check-row">
+    {% set is_done = key in done_set %}
+    <div class="stop-row">
       <form method="POST" style="display:contents">
+        <input type="hidden" name="run_id"    value="{{ run.id }}">
         <input type="hidden" name="key"       value="{{ key }}">
         <input type="hidden" name="address"   value="{{ s.address }}">
         <input type="hidden" name="volunteer" value="{{ vol.name }}">
         <input type="hidden" name="stop_num"  value="{{ loop.index }}">
-        {% if is_done %}
-        <input type="hidden" name="action" value="unmark_done">
-        <input type="checkbox" checked onchange="this.form.submit()">
-        {% else %}
-        <input type="hidden" name="action" value="mark_done">
-        <input type="checkbox" onchange="this.form.submit()">
-        {% endif %}
+        <input type="hidden" name="action"    value="{% if is_done %}unmark_done{% else %}mark_done{% endif %}">
+        <input type="checkbox" {% if is_done %}checked{% endif %} onchange="this.form.submit()" style="margin-top:5px;flex-shrink:0">
       </form>
-      <div style="flex:1">
-        {% if is_done %}
-        <span style="text-decoration:line-through;color:#888">
-          <strong>Stop {{ loop.index }}:</strong> {{ s.address }}
-          {% if s.contact %} · 👤 {{ s.contact }}{% endif %}
-        </span>
-        <span style="color:#22c55e;margin-left:6px">✅ {{ done[key].delivered_date if key in done else '' }}</span>
-        {% else %}
-        <strong>Stop {{ loop.index }}:</strong> {{ s.address }}
-        {% if s.contact %}<span style="color:#888"> · 👤 {{ s.contact }}</span>{% endif %}
-        {% if s.note %}<span style="color:#888"> — <em>{{ s.note }}</em></span>{% endif %}
+      <div style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:{% if is_done %}#34c75922{% else %}{{ r.hex }}22{% endif %};border:1.5px solid {% if is_done %}#34c759{% else %}{{ r.hex }}{% endif %};color:{% if is_done %}#34c759{% else %}{{ r.hex }}{% endif %};font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px">{{ loop.index }}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;{% if is_done %}color:var(--text3);text-decoration:line-through{% else %}color:var(--text){% endif %}">
+          {{ s.address }}
+        </div>
+        {% if s.contact or s.phone %}
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">
+          {% if s.contact %}👤 {{ s.contact }}{% endif %}
+          {% if s.phone %} · {{ s.phone }}{% endif %}
+        </div>
         {% endif %}
-        <br>
+        {% if s.note %}
+        <div style="font-size:12px;color:var(--text3)">📝 {{ s.note }}</div>
+        {% endif %}
         {% set prev = vol.address if loop.index0==0 else r.stops[loop.index0-1].address %}
-        <a href="{{ gmaps_url(prev, s.address) }}" target="_blank" style="font-size:12px;color:#4a9eff">📍 Directions</a>
+        <a href="{{ gmaps_url(prev, s.address) }}" target="_blank" style="font-size:12px;color:var(--accent)">Directions →</a>
       </div>
     </div>
     {% endfor %}
     </div>
   </details>
   {% endfor %}
+
+  {% else %}
+  <div class="alert alert-info">Select a run from the left to view its stops.</div>
+  {% endif %}
+  </div>
+
 </div>
-{% endfor %}
 {% endif %}
+
+<script>
+function filterRunList(q){
+  q = q.toLowerCase();
+  document.querySelectorAll('.run-list-item').forEach(el=>{
+    el.style.display = el.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+function toggleRename(){
+  const f = document.getElementById('rename-form');
+  f.classList.toggle('show');
+}
+</script>
 {% endblock %}
