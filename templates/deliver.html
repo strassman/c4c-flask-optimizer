@@ -224,6 +224,191 @@ function submitPhoto(idx){
   const f = document.getElementById('photo-form-'+idx);
   const file = document.getElementById('cam-'+idx).files[0];
   if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    const card = document.getElementById('card-'+idx);
+    // Remove any existing preview
+    const existing = card.querySelector('.photo-preview');
+    if(existing) existing.remove();
+    // Insert persistent preview
+    const preview = document.createElement('div');
+    preview.className = 'photo-preview';
+    preview.id = 'preview-'+idx;
+    preview.innerHTML = `<img src="${e.target.result}"><div class="photo-badge">📤 Uploading...</div>`;
+    const actions = card.querySelector('.stop-actions');
+    if(actions) actions.before(preview); else card.appendChild(preview);
+    // Disable buttons while uploading
+    card.querySelectorAll('button').forEach(b => b.disabled = true);
+    // Submit — page will reload with photo from Supabase after redirect
+    f.submit();
+  };
+  reader.readAsDataURL(file);
+}
+
+// Poll for progress updates every 30s (shows campaign's live view too)
+setInterval(async ()=>{
+  try{
+    const r = await fetch('/deliver/{{ run_id }}/{{ vol_token }}/progress');
+    const d = await r.json();
+    document.getElementById('prog-fill').style.width = d.pct+'%';
+    document.getElementById('prog-label').textContent = `${d.done} of ${d.total} placed`;
+    document.getElementById('prog-pct').textContent = d.pct+'%';
+  }catch(e){}
+}, 30000);
+</script>
+</body>
+</html>.gps-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);padding:2px 8px;border-radius:10px;background:var(--surface2)}
+.gps-chip.active{color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-name">Hi, {{ vol_name }}! 👋</div>
+      <div class="hdr-run">{{ run.name }}</div>
+    </div>
+    <div id="gps-chip" class="gps-chip">📍 GPS off</div>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog-fill" id="prog-fill" style="width:{{ (done_ct/total*100)|round }}%"></div>
+  </div>
+  <div class="prog-label">
+    <span id="prog-label">{{ done_ct }} of {{ total }} placed</span>
+    <span id="prog-pct">{{ (done_ct/total*100)|round }}%</span>
+  </div>
+</div>
+
+{% if done_ct == total %}
+<div class="complete-banner">
+  <div class="icon">🎉</div>
+  <h2>All Done!</h2>
+  <p>You've placed all {{ total }} signs. Thank you!</p>
+</div>
+{% endif %}
+
+<div class="stops">
+{% for stop in vol_route.stops %}
+{% set key = vol_name + '_' + loop.index0|string %}
+{% set is_done = key in done_set %}
+{% set photo = photo_map.get(key) %}
+
+<div class="stop-card {% if is_done %}done{% elif loop.first and done_ct < total %}active-stop{% endif %}" id="card-{{ loop.index0 }}">
+  <div class="stop-header">
+    <div class="stop-num {% if is_done %}done{% else %}pending{% endif %}">
+      {% if is_done %}✓{% else %}{{ loop.index }}{% endif %}
+    </div>
+    <div class="stop-info">
+      <div class="stop-addr">{{ stop.address.split(',')[0] }}</div>
+      <div class="stop-meta">
+        {{ stop.address.split(',')[1:]|join(',') }}
+        {% if stop.contact %} · {{ stop.contact }}{% endif %}
+        {% if stop.phone %} · {{ stop.phone }}{% endif %}
+      </div>
+      {% if stop.note %}<div class="stop-meta" style="color:var(--orange)">📝 {{ stop.note }}</div>{% endif %}
+    </div>
+    {% if is_done %}
+    <div class="stop-status">
+      <span style="font-size:22px">✅</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if photo %}
+  <div class="photo-preview">
+    <img src="{{ photo.photo_url }}" alt="Sign photo" loading="lazy">
+    <div class="photo-badge">📸 {{ photo.taken_at[:10] }}{% if not is_done %} · before{% else %} · placed{% endif %}</div>
+  </div>
+  {% endif %}
+
+  <div class="stop-actions" id="actions-{{ loop.index0 }}">
+    {% if not is_done %}
+    <!-- Mark placed (no photo) -->
+    <form method="POST" style="flex:1">
+      <input type="hidden" name="action" value="mark_done">
+      <input type="hidden" name="stop_key" value="{{ key }}">
+      <button class="btn btn-done" type="submit">✅ Mark Placed</button>
+    </form>
+    {% endif %}
+    <!-- Photo upload — always visible (before OR after placing) -->
+    <form method="POST" enctype="multipart/form-data" style="flex:{% if is_done %}1{% else %}1{% endif %}" id="photo-form-{{ loop.index0 }}">
+      <input type="hidden" name="action" value="upload_photo">
+      <input type="hidden" name="stop_key" value="{{ key }}">
+      <input type="hidden" name="lat" id="lat-{{ loop.index0 }}">
+      <input type="hidden" name="lng" id="lng-{{ loop.index0 }}">
+      <input type="file" name="photo" accept="image/*" capture="environment"
+             class="camera-input" id="cam-{{ loop.index0 }}"
+             onchange="submitPhoto({{ loop.index0 }})">
+      <button type="button" class="btn btn-photo" onclick="openCamera({{ loop.index0 }})">
+        {% if photo %}📷 Replace Photo{% else %}📷 {% if is_done %}Add Photo{% else %}Photo + Place{% endif %}{% endif %}
+      </button>
+    </form>
+  </div>
+
+  <!-- Directions -->
+  <a class="dir-link" href="https://www.google.com/maps/dir/?api=1&destination={{ stop.address|urlencode }}" target="_blank">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg>
+    Directions
+  </a>
+</div>
+{% endfor %}
+</div>
+
+<script>
+let userLat = null, userLng = null;
+
+// GPS
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    document.getElementById('gps-chip').textContent = '📍 GPS on';
+    document.getElementById('gps-chip').classList.add('active');
+    // Fill lat/lng on all photo forms
+    document.querySelectorAll('[id^="lat-"]').forEach((el,i) => el.value = userLat);
+    document.querySelectorAll('[id^="lng-"]').forEach((el,i) => el.value = userLng);
+    highlightNearest();
+  }, null, {enableHighAccuracy:true, maximumAge:10000});
+}
+
+const stopCoords = {{ vol_route.stops|map(attribute='lat')|list|tojson }} ;
+const stopLngs   = {{ vol_route.stops|map(attribute='lng')|list|tojson }} ;
+const doneSet    = new Set({{ done_set|list|tojson }});
+
+function haversine(la1,lo1,la2,lo2){
+  const R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+
+function highlightNearest(){
+  if(!userLat) return;
+  let best=-1, bestDist=99999;
+  stopCoords.forEach((la,i)=>{
+    if(!la||doneSet.has('{{ vol_name }}_'+i)) return;
+    const d=haversine(userLat,userLng,la,stopLngs[i]);
+    if(d<bestDist){bestDist=d;best=i;}
+  });
+  document.querySelectorAll('.stop-card').forEach(c=>c.classList.remove('active-stop'));
+  if(best>=0){
+    const card=document.getElementById('card-'+best);
+    if(card){card.classList.add('active-stop');card.scrollIntoView({behavior:'smooth',block:'center'});}
+  }
+}
+
+function openCamera(idx){
+  document.getElementById('lat-'+idx).value = userLat||'';
+  document.getElementById('lng-'+idx).value = userLng||'';
+  document.getElementById('cam-'+idx).click();
+}
+
+function submitPhoto(idx){
+  const f = document.getElementById('photo-form-'+idx);
+  const file = document.getElementById('cam-'+idx).files[0];
+  if(!file) return;
   // Show quick preview before submit
   const reader = new FileReader();
   reader.onload = e => {
