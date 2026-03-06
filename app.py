@@ -550,10 +550,36 @@ def delivery_run():
 @app.route("/map")
 @login_required
 def map_page():
-    d      = get_data()
-    routes = session.get("routes", [])
-    prox   = session.get("prox", None)
+    d         = get_data()
+    routes    = session.get("routes", [])
+    prox      = session.get("prox", None)
+    done_keys = list(d["done"].keys())
+
+    # Build all_pending_routes: deduplicated stops across ALL history
+    # keyed by address so same address doesn't appear twice across runs
+    seen_addresses = set()
+    all_pending_routes = []
+    for rec in d["history"]:
+        for r in rec.get("routes", []):
+            vol = r.get("volunteer", {})
+            pending_stops = []
+            for i, s in enumerate(r.get("stops", [])):
+                key = vol.get("name","") + "_" + str(i)
+                addr = s.get("address","")
+                if key not in done_keys and addr not in seen_addresses and addr:
+                    pending_stops.append({"stop": s, "index": i})
+                    seen_addresses.add(addr)
+            if pending_stops:
+                all_pending_routes.append({
+                    "volunteer": vol,
+                    "stops_with_index": pending_stops,
+                    "hex": r.get("hex", "#4a9eff"),
+                    "color": r.get("color", "blue"),
+                })
+
     return render_template("map.html", d=d, routes=routes, prox=prox,
+                           done_keys=done_keys,
+                           all_pending_routes=all_pending_routes,
                            HEX_COLORS=HEX_COLORS, COLORS=COLORS)
 
 @app.route("/map/reset")
