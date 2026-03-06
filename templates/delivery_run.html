@@ -99,8 +99,10 @@
   <div style="display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn btn-secondary" type="submit" name="action" value="save_run">💾 Save Run</button>
     <button class="btn btn-danger" type="submit" name="action" value="clear_run" onclick="return confirm('Clear run?')">🗑️ Clear Run</button>
-    <button class="btn btn-primary" type="button" id="optimize-btn" onclick="submitOptimize()">
-      🚀 Optimize Routes <span class="spinner" id="opt-spinner"></span>
+    <button class="btn btn-primary btn-lg" type="button" id="optimize-btn" onclick="submitOptimize()">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L12.5 9H20L14 13.5L16.5 20L10 15.5L3.5 20L6 13.5L0 9H7.5L10 2Z"/></svg>
+      <span id="opt-label">Optimize Routes</span>
+      <span class="spinner" id="opt-spinner" style="display:none"></span>
     </button>
   </div>
 </div>
@@ -183,7 +185,7 @@ function submitOptimize() {
   const action  = urgency === 'today' ? 'optimize' : 'proximity';
   document.getElementById('opt-spinner').style.display = 'inline-block';
   document.getElementById('optimize-btn').disabled = true;
-  document.getElementById('optimize-btn').textContent = urgency === 'today' ? '⏳ Optimizing...' : '⏳ Clustering...';
+  document.getElementById('opt-label').textContent = urgency === 'today' ? 'Optimizing...' : 'Clustering...';
 
   // Create a hidden input for action
   const inp = document.createElement('input');
