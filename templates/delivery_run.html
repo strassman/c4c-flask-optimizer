@@ -10,21 +10,21 @@
 <div class="grid2">
 
   <!-- Volunteers -->
-  <div class="card">
+  <div class="card" style="display:flex;flex-direction:column">
     <div class="card-title">👥 Who is available today?</div>
     {% if not d.vols %}
     <div class="alert alert-info">Add volunteers first on the Volunteers page.</div>
     {% else %}
-    <input type="text" id="vol-search" placeholder="🔍 Filter volunteers..." oninput="filterVols(this.value)" style="margin-bottom:10px">
-    <div id="vol-list">
+    <input type="text" id="vol-search" placeholder="Filter volunteers..." oninput="filterVols(this.value)" style="margin-bottom:10px">
+    <div id="vol-list" style="flex:1;overflow-y:auto;max-height:420px;padding-right:4px">
     {% for v in d.vols %}
-    <label class="vol-item" style="display:flex;align-items:center;gap:10px;margin-top:8px;cursor:pointer;color:#ddd"
+    <label class="vol-item" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)"
       data-lat="{{ v.lat if v.lat else '' }}" data-lng="{{ v.lng if v.lng else '' }}" data-name="{{ v.name }}">
       <input type="checkbox" name="avail" value="{{ v.name }}" {% if v.name in avail %}checked{% endif %}>
-      <span>
-        <strong>{{ v.name }}</strong>
-        <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:#f59e0b;font-weight:600"></span>
-        <br><span style="color:#888;font-size:12px">{{ v.address }}</span>
+      <span style="min-width:0">
+        <strong style="font-size:13px">{{ v.name }}</strong>
+        <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:var(--orange);font-weight:600"></span>
+        <br><span style="color:var(--text3);font-size:12px">{{ v.address }}</span>
       </span>
     </label>
     {% endfor %}
@@ -33,27 +33,27 @@
   </div>
 
   <!-- Addresses -->
-  <div class="card">
+  <div class="card" style="display:flex;flex-direction:column">
     <div class="card-title">📍 Addresses for this Run</div>
     {% if not d.addrs %}
     <div class="alert alert-info">Add constituents first.</div>
     {% else %}
     <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
-      <input type="text" id="addr-search" placeholder="🔍 Filter addresses..." oninput="filterAddrs(this.value)" style="flex:1;margin:0">
-      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()" style="white-space:nowrap">Select All</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()" style="white-space:nowrap">Clear</button>
+      <input type="text" id="addr-search" placeholder="Filter addresses..." oninput="filterAddrs(this.value)" style="flex:1;margin:0">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()">Select All</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
     </div>
-    <div id="addr-list" style="max-height:300px;overflow-y:auto">
+    <div id="addr-list" style="flex:1;overflow-y:auto;max-height:420px;padding-right:4px">
     {% for a in d.addrs %}
     {% if a.status != 'delivered' %}
-    <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid #1e2235;cursor:pointer;color:#ddd">
-      <input type="checkbox" name="run_ids" value="{{ a.id }}" {% if a.id in d.run_ids %}checked{% endif %} style="margin-top:2px">
-      <span style="font-size:13px">{{ a.address }}{% if a.contact %} <span style="color:#888">· {{ a.contact }}</span>{% endif %}</span>
+    <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)">
+      <input type="checkbox" name="run_ids" value="{{ a.id }}" {% if a.id in d.run_ids %}checked{% endif %} style="margin-top:2px;flex-shrink:0">
+      <span style="font-size:13px;min-width:0">{{ a.address }}{% if a.contact %} <span style="color:var(--text3)">· {{ a.contact }}</span>{% endif %}</span>
     </label>
     {% endif %}
     {% endfor %}
     </div>
-    <p style="color:#888;font-size:12px;margin-top:8px" id="run-count"></p>
+    <p style="color:var(--text3);font-size:12px;margin-top:8px" id="run-count"></p>
     {% endif %}
   </div>
 </div>
