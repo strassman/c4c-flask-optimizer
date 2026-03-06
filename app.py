@@ -1,10 +1,100 @@
-import os, math, uuid, hashlib, requests, urllib.parse
-from datetime import datetime
+import os, math, uuid, hashlib, requests, urllib.parse, base64, json
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from flask_session import Session
 from supabase import create_client
 from geopy.geocoders import Nominatim
+
+# ── Token encryption ───────────────────────────────────────────────────────────
+# Fernet symmetric encryption for OAuth tokens at rest.
+# INTEGRATION_KEY must be a 32-url-safe-base64 bytes key set in Railway env vars.
+# Generate with: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+try:
+    from cryptography.fernet import Fernet
+    _raw_key = os.environ.get("INTEGRATION_KEY", "")
+    _fernet  = Fernet(_raw_key.encode()) if _raw_key else None
+except Exception:
+    _fernet = None
+
+def encrypt_token(token: str) -> str:
+    """Encrypt an OAuth token for storage. Falls back to base64 if key not set."""
+    if not token: return ""
+    if _fernet:
+        return _fernet.encrypt(token.encode()).decode()
+    # Fallback: obfuscate only — set INTEGRATION_KEY in production!
+    return base64.b64encode(token.encode()).decode()
+
+def decrypt_token(stored: str) -> str:
+    """Decrypt a stored OAuth token."""
+    if not stored: return ""
+    if _fernet:
+        try:
+            return _fernet.decrypt(stored.encode()).decode()
+        except Exception:
+            return ""
+    try:
+        return base64.b64decode(stored.encode()).decode()
+    except Exception:
+        return ""
+
+# ── Integration provider registry ─────────────────────────────────────────────
+# Each entry describes one OAuth provider. Credentials come from env vars.
+# Scopes and URLs will be filled in when you obtain API access from each vendor.
+INTEGRATIONS = {
+    "ngpvan": {
+        "name":          "NGP VAN",
+        "logo":          "🗳️",
+        "description":   "Voter file, contact history, survey responses, volunteer data",
+        "color":         "#1a5fa8",
+        "auth_url":      os.environ.get("VAN_AUTH_URL",    "https://auth.ngpvan.com/oauth2/authorize"),
+        "token_url":     os.environ.get("VAN_TOKEN_URL",   "https://auth.ngpvan.com/oauth2/token"),
+        "client_id":     os.environ.get("VAN_CLIENT_ID",   ""),
+        "client_secret": os.environ.get("VAN_CLIENT_SECRET",""),
+        "scope":         "contacts voterFile surveys",
+        "docs":          "https://developers.ngpvan.com/van-api",
+        "status":        "coming_soon",   # change to "enabled" once you have API access
+    },
+    "nationbuilder": {
+        "name":          "NationBuilder",
+        "logo":          "🏛️",
+        "description":   "People database, membership, donations, events, tags",
+        "color":         "#e8562a",
+        "auth_url":      "https://{slug}.nationbuilder.com/oauth/authorize",
+        "token_url":     "https://{slug}.nationbuilder.com/oauth/token",
+        "client_id":     os.environ.get("NB_CLIENT_ID",    ""),
+        "client_secret": os.environ.get("NB_CLIENT_SECRET",""),
+        "scope":         "people donations",
+        "docs":          "https://nationbuilder.com/api_documentation",
+        "status":        "coming_soon",
+    },
+    "actblue": {
+        "name":          "ActBlue",
+        "logo":          "💙",
+        "description":   "Donation records, donor contact info, fundraising data",
+        "color":         "#2655a0",
+        "auth_url":      "",   # ActBlue uses API key auth, not OAuth — handled separately
+        "token_url":     "",
+        "client_id":     os.environ.get("ACTBLUE_CLIENT_ID",""),
+        "client_secret": os.environ.get("ACTBLUE_CLIENT_SECRET",""),
+        "scope":         "",
+        "docs":          "https://secure.actblue.com/docs/api",
+        "status":        "coming_soon",
+    },
+    "catalist": {
+        "name":          "Catalist",
+        "logo":          "📊",
+        "description":   "National voter file, modeling scores, demographic data",
+        "color":         "#2d6a4f",
+        "auth_url":      "",
+        "token_url":     "",
+        "client_id":     os.environ.get("CATALIST_CLIENT_ID",""),
+        "client_secret": os.environ.get("CATALIST_CLIENT_SECRET",""),
+        "scope":         "",
+        "docs":          "https://catalist.us",
+        "status":        "coming_soon",
+    },
+}
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
@@ -205,6 +295,146 @@ def detect_col(cols, key):
     return None
 
 # ══════════════════════════════════════════════════════════════════════════════
+# INTEGRATION DB HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def get_integrations(cid: str) -> dict:
+    """Load all integration records for a campaign. Returns dict keyed by provider."""
+    try:
+        rows = db().table("campaign_integrations")                    .select("*").eq("campaign_id", cid).execute().data
+        return {r["provider"]: r for r in rows}
+    except Exception:
+        return {}
+
+def save_integration(cid: str, provider: str, data: dict):
+    """Upsert an integration record. Tokens must already be encrypted."""
+    try:
+        db().table("campaign_integrations").upsert({
+            "campaign_id": cid,
+            "provider":    provider,
+            **data,
+        }, on_conflict="campaign_id,provider").execute()
+    except Exception as e:
+        print(f"save_integration error: {e}", flush=True)
+
+def delete_integration(cid: str, provider: str):
+    """Remove an integration (disconnect)."""
+    try:
+        db().table("campaign_integrations")             .delete().eq("campaign_id", cid).eq("provider", provider).execute()
+    except Exception as e:
+        print(f"delete_integration error: {e}", flush=True)
+
+def integration_connected(cid: str, provider: str) -> bool:
+    """Quick check — is this provider connected for this campaign?"""
+    intgs = get_integrations(cid)
+    rec   = intgs.get(provider)
+    return bool(rec and rec.get("status") == "connected" and rec.get("access_token_enc"))
+
+# ── Read-only data fetchers ────────────────────────────────────────────────────
+# These functions pull data from external APIs and MAP it to our internal
+# constituent schema. They never write back to the external system.
+# Implement the body once you have API credentials.
+
+def fetch_van_contacts(cid: str, limit: int = 500) -> list:
+    """
+    Pull contacts from NGP VAN API (read-only).
+    Maps VAN fields → our constituent schema.
+    Returns list of dicts ready to merge into d["addrs"].
+    """
+    intgs = get_integrations(cid)
+    rec   = intgs.get("ngpvan")
+    if not rec or rec.get("status") != "connected":
+        return []
+    token = decrypt_token(rec.get("access_token_enc", ""))
+    if not token:
+        return []
+    # ── TODO: implement when VAN API access obtained ───────────────────────
+    # docs: https://developers.ngpvan.com/van-api#people-get-people
+    # base = "https://api.securevan.com/v4"
+    # headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
+    # resp = requests.get(f"{base}/people/search", headers=headers,
+    #                     params={"$top": limit}, timeout=15)
+    # raw = resp.json().get("items", [])
+    # return [_map_van_contact(c) for c in raw]
+    return []
+
+def _map_van_contact(raw: dict) -> dict:
+    """Map a single VAN contact record to our schema. READ ONLY — never write back."""
+    addr_parts = raw.get("primaryAddress", {})
+    address    = ", ".join(filter(None, [
+        addr_parts.get("addressLine1",""),
+        addr_parts.get("city",""),
+        addr_parts.get("stateOrProvince",""),
+        addr_parts.get("zipOrPostalCode",""),
+    ]))
+    return {
+        "id":            str(uuid.uuid4()),
+        "address":       address,
+        "first_name":    raw.get("firstName",""),
+        "last_name":     raw.get("lastName",""),
+        "contact":       f"{raw.get('firstName','')} {raw.get('lastName','')}".strip(),
+        "phone":         (raw.get("phones") or [{}])[0].get("phoneNumber",""),
+        "email":         (raw.get("emails") or [{}])[0].get("email",""),
+        "voter_id":      str(raw.get("vanId","")),
+        "party":         raw.get("party",""),
+        "precinct":      raw.get("precinct",{}).get("name","") if raw.get("precinct") else "",
+        "support_score": str(raw.get("supportScore","")) if raw.get("supportScore") else "",
+        "status":        "pending",
+        "source":        "ngpvan",       # marks record as read-only import
+        "source_id":     str(raw.get("vanId","")),
+    }
+
+def fetch_nb_people(cid: str, limit: int = 500) -> list:
+    """
+    Pull people from NationBuilder API (read-only).
+    Maps NB fields → our constituent schema.
+    """
+    intgs = get_integrations(cid)
+    rec   = intgs.get("nationbuilder")
+    if not rec or rec.get("status") != "connected":
+        return []
+    token = decrypt_token(rec.get("access_token_enc", ""))
+    slug  = rec.get("nb_slug","")
+    if not token or not slug:
+        return []
+    # ── TODO: implement when NB API access obtained ────────────────────────
+    # docs: https://nationbuilder.com/people_api
+    # base = f"https://{slug}.nationbuilder.com/api/v1"
+    # headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    # resp = requests.get(f"{base}/people", headers=headers,
+    #                     params={"limit": limit}, timeout=15)
+    # raw = resp.json().get("results", [])
+    # return [_map_nb_person(p) for p in raw]
+    return []
+
+def _map_nb_person(raw: dict) -> dict:
+    """Map a NationBuilder person to our schema. READ ONLY."""
+    addr = ", ".join(filter(None,[
+        raw.get("primary_address",{}).get("address1",""),
+        raw.get("primary_address",{}).get("city",""),
+        raw.get("primary_address",{}).get("state",""),
+        raw.get("primary_address",{}).get("zip",""),
+    ]))
+    return {
+        "id":             str(uuid.uuid4()),
+        "address":        addr,
+        "first_name":     raw.get("first_name",""),
+        "last_name":      raw.get("last_name",""),
+        "contact":        f"{raw.get('first_name','')} {raw.get('last_name','')}".strip(),
+        "phone":          raw.get("phone",""),
+        "email":          raw.get("email",""),
+        "party":          raw.get("party",""),
+        "precinct":       raw.get("precinct",""),
+        "support_score":  str(raw.get("support_level","")) if raw.get("support_level") else "",
+        "donor":          bool(raw.get("is_donor")),
+        "volunteer_interest": bool(raw.get("is_volunteer")),
+        "tags":           [t.get("name","") for t in raw.get("tags",[])],
+        "status":         "pending",
+        "source":         "nationbuilder",
+        "source_id":      str(raw.get("id","")),
+    }
+
+# ══════════════════════════════════════════════════════════════════════════════
 # AUTH ROUTES
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/", methods=["GET","POST"])
@@ -263,6 +493,175 @@ def login_page():
 def logout():
     session.clear()
     return redirect(url_for("login_page"))
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INTEGRATIONS PAGE
+# ══════════════════════════════════════════════════════════════════════════════
+@app.route("/integrations", methods=["GET","POST"])
+@login_required
+def integrations_page():
+    cid   = session["cid"]
+    intgs = get_integrations(cid)
+    msg   = None
+
+    if request.method == "POST":
+        action   = request.form.get("action")
+        provider = request.form.get("provider","")
+
+        if action == "disconnect":
+            delete_integration(cid, provider)
+            msg = f"Disconnected {INTEGRATIONS.get(provider,{}).get('name', provider)}."
+
+        elif action == "manual_api_key":
+            # For providers that use API keys instead of OAuth (ActBlue, Catalist)
+            api_key = request.form.get("api_key","").strip()
+            if api_key:
+                save_integration(cid, provider, {
+                    "status":           "connected",
+                    "access_token_enc": encrypt_token(api_key),
+                    "auth_type":        "api_key",
+                    "connected_at":     datetime.now().isoformat(),
+                    "last_sync":        None,
+                    "nb_slug":          request.form.get("nb_slug","").strip(),
+                })
+                msg = f"Connected {INTEGRATIONS.get(provider,{}).get('name', provider)}."
+            else:
+                msg = "API key required."
+
+        elif action == "sync":
+            # Trigger a read-only data pull and merge into campaign data
+            provider_name = INTEGRATIONS.get(provider,{}).get("name", provider)
+            if provider == "ngpvan":
+                contacts = fetch_van_contacts(cid)
+            elif provider == "nationbuilder":
+                contacts = fetch_nb_people(cid)
+            else:
+                contacts = []
+
+            if contacts:
+                d = get_data()
+                existing_source_ids = {a.get("source_id") for a in d["addrs"] if a.get("source_id")}
+                new_records = [c for c in contacts if c.get("source_id") not in existing_source_ids]
+                d["addrs"].extend(new_records)
+                save_session("addrs", d["addrs"])
+                # Update last_sync timestamp
+                if provider in intgs:
+                    rec = intgs[provider]
+                    rec["last_sync"] = datetime.now().isoformat()
+                    save_integration(cid, provider, rec)
+                msg = f"Synced {len(new_records)} new records from {provider_name}."
+            else:
+                msg = f"No new records from {provider_name} (API not yet configured)."
+
+        return redirect(url_for("integrations_page"))
+
+    return render_template("integrations.html",
+                           integrations=INTEGRATIONS,
+                           connected=intgs,
+                           msg=msg)
+
+# ── OAuth flow ─────────────────────────────────────────────────────────────────
+@app.route("/integrations/connect/<provider>")
+@login_required
+def oauth_connect(provider):
+    """
+    Step 1: Redirect the campaign to the provider's OAuth authorization page.
+    State param prevents CSRF — we store cid in it (signed by session).
+    """
+    cfg = INTEGRATIONS.get(provider)
+    if not cfg or cfg.get("status") == "coming_soon":
+        return redirect(url_for("integrations_page"))
+    if not cfg.get("client_id"):
+        return redirect(url_for("integrations_page"))
+
+    # For NationBuilder we need the campaign's NB slug first
+    if provider == "nationbuilder":
+        nb_slug = request.args.get("slug","").strip()
+        if not nb_slug:
+            return redirect(url_for("integrations_page"))
+        session["nb_slug"] = nb_slug
+        auth_url = cfg["auth_url"].replace("{slug}", nb_slug)
+        token_url = cfg["token_url"].replace("{slug}", nb_slug)
+    else:
+        auth_url = cfg["auth_url"]
+
+    state        = hashlib.sha256(f"{session['cid']}{app.secret_key}".encode()).hexdigest()
+    session["oauth_state"]    = state
+    session["oauth_provider"] = provider
+
+    callback = url_for("oauth_callback", provider=provider, _external=True)
+    params = {
+        "response_type": "code",
+        "client_id":     cfg["client_id"],
+        "redirect_uri":  callback,
+        "scope":         cfg.get("scope",""),
+        "state":         state,
+    }
+    return redirect(auth_url + "?" + urllib.parse.urlencode(params))
+
+
+@app.route("/integrations/callback/<provider>")
+@login_required
+def oauth_callback(provider):
+    """
+    Step 2: Provider redirects back here with an authorization code.
+    We exchange it for an access token and store it encrypted.
+    """
+    cfg   = INTEGRATIONS.get(provider, {})
+    error = request.args.get("error")
+    code  = request.args.get("code")
+    state = request.args.get("state")
+    cid   = session["cid"]
+
+    # Validate state to prevent CSRF
+    expected = hashlib.sha256(f"{cid}{app.secret_key}".encode()).hexdigest()
+    if state != expected or session.get("oauth_state") != state:
+        return redirect(url_for("integrations_page"))
+    if error or not code:
+        return redirect(url_for("integrations_page"))
+
+    # Exchange code for token
+    nb_slug   = session.pop("nb_slug", "")
+    token_url = cfg.get("token_url","")
+    if provider == "nationbuilder" and nb_slug:
+        token_url = token_url.replace("{slug}", nb_slug)
+
+    callback = url_for("oauth_callback", provider=provider, _external=True)
+    try:
+        resp = requests.post(token_url, data={
+            "grant_type":    "authorization_code",
+            "code":          code,
+            "redirect_uri":  callback,
+            "client_id":     cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+        }, timeout=15)
+        token_data = resp.json()
+    except Exception as e:
+        print(f"OAuth token exchange error ({provider}): {e}", flush=True)
+        return redirect(url_for("integrations_page"))
+
+    access_token  = token_data.get("access_token","")
+    refresh_token = token_data.get("refresh_token","")
+    expires_in    = token_data.get("expires_in", 3600)
+
+    if not access_token:
+        return redirect(url_for("integrations_page"))
+
+    save_integration(cid, provider, {
+        "status":            "connected",
+        "access_token_enc":  encrypt_token(access_token),
+        "refresh_token_enc": encrypt_token(refresh_token),
+        "token_expiry":      (datetime.now() + timedelta(seconds=expires_in)).isoformat(),
+        "auth_type":         "oauth2",
+        "connected_at":      datetime.now().isoformat(),
+        "last_sync":         None,
+        "nb_slug":           nb_slug,
+        "scopes":            cfg.get("scope",""),
+    })
+
+    session.pop("oauth_state", None)
+    session.pop("oauth_provider", None)
+    return redirect(url_for("integrations_page"))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VOLUNTEERS
