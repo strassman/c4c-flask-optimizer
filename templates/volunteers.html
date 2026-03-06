@@ -2,33 +2,54 @@
 {% block title %}Volunteers{% endblock %}
 {% block extra_head %}
 <style>
-.tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid #2d3148;border-radius:8px}
-.tbl-wrap thead th{position:sticky;top:0;background:#1a1d27;z-index:1}
+.tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)}
+.tbl-wrap thead th{position:sticky;top:0;background:var(--surface2);z-index:1}
 .search-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .search-bar input{flex:1;margin:0}
-.tbl-count{color:#888;font-size:12px;margin-bottom:8px}
+.tbl-count{color:var(--text3);font-size:12px;margin-bottom:8px}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:580px;max-height:85vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-header h2{font-size:17px;letter-spacing:-0.02em;margin:0}
+.modal-close{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:15px;transition:all .15s}
+.modal-close:hover{background:var(--surface3);color:var(--text)}
+.modal-body{padding:20px 24px}
+.modal-section{margin-bottom:20px}
+.modal-section-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.profile-field label{font-size:11px;color:var(--text3);font-weight:500;display:block;margin-bottom:3px}
+.profile-field input,.profile-field select{margin:0;font-size:13px}
+.clickable-row{cursor:pointer}
+.clickable-row:hover td{background:var(--surface3)!important}
+.vol-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
 </style>
 {% endblock %}
 {% block content %}
-<h1>👥 Volunteer Roster</h1>
-<p class="subtitle">{{ d.vols|length }} volunteer{% if d.vols|length != 1 %}s{% endif %} on file</p>
+<h1>Volunteers</h1>
+
 {% if d.vols %}
 <div class="stat-row">
   <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value blue">{{ d.vols|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">With Email</div><div class="stat-value">{{ d.vols|selectattr('email')|list|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">With Phone</div><div class="stat-value">{{ d.vols|selectattr('phone')|list|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">With Vehicle</div><div class="stat-value">{{ d.vols|selectattr('has_vehicle','equalto',true)|list|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">With Email</div><div class="stat-value">{{ d.vols|selectattr('email')|reject('equalto','')|list|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">With Phone</div><div class="stat-value">{{ d.vols|selectattr('phone')|reject('equalto','')|list|length }}</div></div>
 </div>
 {% endif %}
 
 {% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>{% endif %}
 
 <div class="card">
-  <div class="card-title">Add New Volunteer</div>
+  <div class="card-title">Add Volunteer</div>
   <form method="POST">
     <input type="hidden" name="action" value="add">
     <div class="grid2">
       <div>
-        <label>Full Name *</label><input type="text" name="name" placeholder="Jane Smith" required>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label>First Name *</label><input type="text" name="vfirst" placeholder="Jane" required></div>
+          <div><label>Last Name *</label><input type="text" name="vlast" placeholder="Smith" required></div>
+        </div>
+        <label>Full Name (display) *</label><input type="text" name="name" placeholder="Jane Smith" required>
         <label>Email</label><input type="text" name="email" placeholder="jane@email.com">
         <label>Phone</label><input type="text" name="phone" placeholder="410-555-0100">
       </div>
@@ -39,6 +60,21 @@
           <div><label>State *</label><input type="text" name="state" placeholder="MD" required></div>
           <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201" required></div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label>Availability</label><input type="text" name="availability" placeholder="Weekends, evenings"></div>
+          <div><label>Shirt Size</label>
+            <select name="shirt_size">
+              <option value="">—</option>
+              <option>XS</option><option>S</option><option>M</option>
+              <option>L</option><option>XL</option><option>2XL</option><option>3XL</option>
+            </select>
+          </div>
+        </div>
+        <label>Skills <span style="font-weight:400;color:var(--text3)">(comma separated)</span></label>
+        <input type="text" name="skills" placeholder="driving, canvassing, data entry">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:12px;color:var(--text2);font-size:13px">
+          <input type="checkbox" name="has_vehicle" value="1"> Has vehicle
+        </label>
       </div>
     </div>
     <br><button class="btn btn-primary" type="submit">➕ Add Volunteer</button>
@@ -48,7 +84,7 @@
 <details>
   <summary>📂 Import from CSV</summary>
   <div class="detail-body">
-    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have: first_name, last_name, email, phone, street_address, city, state, zip</p>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">Columns: first_name, last_name, email, phone, street_address, city, state, zip</p>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="import_csv">
       <input type="file" name="csv_file" accept=".csv" required>
@@ -60,49 +96,51 @@
 <hr class="divider">
 
 {% if d.vols %}
-{% set all_emails = [] %}
-{% set all_phones = [] %}
-{% for v in d.vols %}
-  {% if v.email %}{% set _ = all_emails.append(v.email) %}{% endif %}
-  {% if v.phone %}{% set _ = all_phones.append(v.phone) %}{% endif %}
-{% endfor %}
+{% set all_emails = [] %}{% set all_phones = [] %}
+{% for v in d.vols %}{% if v.email %}{% set _ = all_emails.append(v.email) %}{% endif %}{% if v.phone %}{% set _ = all_phones.append(v.phone) %}{% endif %}{% endfor %}
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
   <h2 style="margin:0">Roster — {{ d.vols|length }}</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if all_emails %}
-    <a href="mailto:{{ all_emails|join(',') }}?subject=Volunteer Update" class="btn btn-primary btn-sm">📧 Email All</a>
-    {% endif %}
-    {% if all_phones %}
-    <a href="sms:{{ all_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>
-    {% endif %}
+    {% if all_emails %}<a href="mailto:{{ all_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
+    {% if all_phones %}<a href="sms:{{ all_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
     <form method="POST" onsubmit="return confirm('Clear ALL volunteers?')" style="display:inline">
       <input type="hidden" name="action" value="clear">
-      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All</button>
+      <button class="btn btn-danger btn-sm">🗑️ Clear All</button>
     </form>
   </div>
 </div>
 
 <div class="search-bar">
-  <input type="text" id="vol-search" placeholder="🔍 Search name, email, phone, address..." oninput="filterTable('vol-search','vol-tbody','vol-count')">
+  <input type="text" id="vol-search" placeholder="Search name, email, phone, skills..." oninput="filterTable('vol-search','vol-tbody','vol-count')">
 </div>
 <p class="tbl-count" id="vol-count"></p>
 
 <div class="tbl-wrap">
   <table class="tbl">
-    <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th></th></tr></thead>
+    <thead><tr><th>Volunteer</th><th>Phone</th><th>Availability</th><th>Skills</th><th>Vehicle</th><th>Runs</th><th></th></tr></thead>
     <tbody id="vol-tbody">
     {% for v in d.vols %}
-    <tr>
-      <td><strong>{{ v.name }}</strong></td>
-      <td>{% if v.email %}<a href="mailto:{{ v.email }}" style="color:#4a9eff">{{ v.email }}</a>{% else %}—{% endif %}</td>
-      <td>{% if v.phone %}<a href="sms:{{ v.phone }}" style="color:#4a9eff">{{ v.phone }}</a>{% else %}—{% endif %}</td>
-      <td>{{ v.address or '—' }}</td>
+    <tr class="clickable-row" onclick="openVol({{ loop.index0 }})">
       <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="vol-avatar">{{ (v.name or '?')[0].upper() }}</div>
+          <div>
+            <strong>{{ v.name }}</strong>
+            {% if v.email %}<br><span style="font-size:11px;color:var(--text3)">{{ v.email }}</span>{% endif %}
+          </div>
+        </div>
+      </td>
+      <td>{% if v.phone %}<a href="sms:{{ v.phone }}" onclick="event.stopPropagation()" style="color:var(--accent)">{{ v.phone }}</a>{% else %}—{% endif %}</td>
+      <td style="color:var(--text2);font-size:12px">{{ v.availability or '—' }}</td>
+      <td>{% for s in (v.skills or [])[:2] %}<span style="font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:1px 7px;color:var(--text2);margin-right:3px">{{ s }}</span>{% endfor %}{% if (v.skills or [])|length > 2 %}<span style="color:var(--text3);font-size:11px">+{{ (v.skills|length)-2 }}</span>{% endif %}</td>
+      <td>{% if v.has_vehicle %}<span style="color:var(--green)">🚗</span>{% else %}—{% endif %}</td>
+      <td><span style="color:var(--text2)">{{ v.runs_completed or 0 }}</span></td>
+      <td onclick="event.stopPropagation()">
         <form method="POST" style="display:inline" onsubmit="return confirm('Remove {{ v.name }}?')">
           <input type="hidden" name="action" value="delete">
           <input type="hidden" name="name" value="{{ v.name }}">
-          <button class="btn btn-danger btn-sm" type="submit">✕</button>
+          <button class="btn btn-danger btn-sm">✕</button>
         </form>
       </td>
     </tr>
@@ -115,7 +153,80 @@
 <div class="alert alert-info">No volunteers yet. Add one above or import from CSV.</div>
 {% endif %}
 
+
+<!-- ══ VOLUNTEER PROFILE MODAL ══ -->
+<div class="modal-overlay hidden" id="vol-modal" onclick="if(event.target===this)closeVol()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-vol-name">Volunteer Profile</h2>
+      <div class="modal-close" onclick="closeVol()">✕</div>
+    </div>
+    <div class="modal-body">
+      <form method="POST" id="vol-form">
+        <input type="hidden" name="action" value="update_vol">
+        <input type="hidden" name="vol_id_key" id="modal-vol-id-key">
+
+        <div class="modal-section">
+          <div class="modal-section-title">Contact Info</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>First Name</label><input type="text" name="first_name" id="vf-first_name"></div>
+            <div class="profile-field"><label>Last Name</label><input type="text" name="last_name" id="vf-last_name"></div>
+            <div class="profile-field"><label>Display Name</label><input type="text" name="name" id="vf-name"></div>
+            <div class="profile-field"><label>Phone</label><input type="text" name="phone" id="vf-phone"></div>
+            <div class="profile-field" style="grid-column:1/-1"><label>Email</label><input type="text" name="email" id="vf-email"></div>
+            <div class="profile-field" style="grid-column:1/-1"><label>Address</label><input type="text" id="vf-address" disabled style="opacity:.6"></div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">Volunteer Details</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Availability</label><input type="text" name="availability" id="vf-availability" placeholder="Weekends, evenings"></div>
+            <div class="profile-field"><label>Shirt Size</label>
+              <select name="shirt_size" id="vf-shirt_size">
+                <option value="">—</option>
+                <option>XS</option><option>S</option><option>M</option>
+                <option>L</option><option>XL</option><option>2XL</option><option>3XL</option>
+              </select>
+            </div>
+            <div class="profile-field" style="grid-column:1/-1"><label>Skills (comma separated)</label><input type="text" name="skills" id="vf-skills" placeholder="driving, canvassing"></div>
+            <div class="profile-field" style="grid-column:1/-1">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:var(--text2);font-size:13px">
+                <input type="checkbox" name="has_vehicle" value="1" id="vf-has_vehicle"> Has vehicle
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">Emergency Contact</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Name</label><input type="text" name="emergency_contact" id="vf-emergency_contact"></div>
+            <div class="profile-field"><label>Phone</label><input type="text" name="emergency_phone" id="vf-emergency_phone"></div>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">Stats & Notes</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Runs Completed</label><input type="text" id="vf-runs_completed" disabled style="opacity:.6"></div>
+            <div class="profile-field"><label>Joined</label><input type="text" id="vf-joined_date" disabled style="opacity:.6"></div>
+            <div class="profile-field" style="grid-column:1/-1"><label>Internal Note</label><input type="text" name="note" id="vf-note"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+          <button type="button" class="btn btn-secondary" onclick="closeVol()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
+const ALL_VOLS = {{ d.vols|tojson }};
+
 function filterTable(searchId, tbodyId, countId) {
   const q = document.getElementById(searchId).value.toLowerCase();
   const rows = document.getElementById(tbodyId).querySelectorAll('tr');
@@ -129,5 +240,31 @@ function filterTable(searchId, tbodyId, countId) {
   if (el) el.textContent = q ? `Showing ${visible} of ${rows.length}` : `${rows.length} total`;
 }
 filterTable('vol-search','vol-tbody','vol-count');
+
+function openVol(idx) {
+  const v = ALL_VOLS[idx];
+  document.getElementById('modal-vol-name').textContent = v.name || 'Volunteer';
+  document.getElementById('modal-vol-id-key').value = v.name; // use name as key
+  ['first_name','last_name','name','phone','email','availability',
+   'shirt_size','emergency_contact','emergency_phone','note'].forEach(f => {
+    const el = document.getElementById('vf-'+f);
+    if (!el) return;
+    if (el.tagName === 'SELECT') el.value = v[f] || '';
+    else el.value = v[f] || '';
+  });
+  document.getElementById('vf-address').value     = v.address || '';
+  document.getElementById('vf-runs_completed').value = v.runs_completed || 0;
+  document.getElementById('vf-joined_date').value = v.joined_date || '—';
+  document.getElementById('vf-skills').value      = (v.skills||[]).join(', ');
+  document.getElementById('vf-has_vehicle').checked = !!v.has_vehicle;
+  document.getElementById('vol-modal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeVol() {
+  document.getElementById('vol-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVol(); });
 </script>
 {% endblock %}
