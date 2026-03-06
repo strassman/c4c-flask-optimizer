@@ -2,20 +2,49 @@
 {% block title %}Constituents{% endblock %}
 {% block extra_head %}
 <style>
-.tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid #2d3148;border-radius:8px}
-.tbl-wrap thead th{position:sticky;top:0;background:#1a1d27;z-index:1}
+.tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)}
+.tbl-wrap thead th{position:sticky;top:0;background:var(--surface2);z-index:1}
 .search-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .search-bar input{flex:1;margin:0}
-.tbl-count{color:#888;font-size:12px;margin-bottom:8px}
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.tbl-count{color:var(--text3);font-size:12px;margin-bottom:8px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+
+/* Profile modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.hidden{display:none}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius-lg);width:100%;max-width:640px;max-height:85vh;overflow-y:auto;box-shadow:0 32px 80px rgba(0,0,0,.6)}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.modal-header h2{font-size:17px;letter-spacing:-0.02em;margin:0}
+.modal-close{background:var(--surface2);border:1px solid var(--border);border-radius:6px;width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:15px;flex-shrink:0;transition:all .15s}
+.modal-close:hover{background:var(--surface3);color:var(--text)}
+.modal-body{padding:20px 24px}
+.modal-section{margin-bottom:20px}
+.modal-section-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.profile-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.profile-field label{font-size:11px;color:var(--text3);font-weight:500;display:block;margin-bottom:3px}
+.profile-field input,.profile-field select,.profile-field textarea{margin:0;font-size:13px}
+.profile-field textarea{resize:vertical;min-height:60px}
+.score-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:14px;font-weight:700;color:var(--text2);transition:all .15s;font-family:inherit}
+.score-btn:hover{border-color:var(--border2);color:var(--text)}
+.score-btn.active-1{background:#ff3b3022;border-color:#ff3b30;color:#ff3b30}
+.score-btn.active-2{background:#ff950022;border-color:#ff9500;color:#ff9500}
+.score-btn.active-3{background:#ffd60a22;border-color:#ffd60a;color:#ffd60a}
+.score-btn.active-4{background:#34c75922;border-color:#34c759;color:#34c759}
+.score-btn.active-5{background:#4f8ef722;border-color:#4f8ef7;color:#4f8ef7}
+.tag-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);font-size:11px;color:var(--text2)}
+.vote-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:6px}
+.vote-box{text-align:center}
+.vote-box label{font-size:10px;color:var(--text3);display:block;margin-bottom:4px}
+.clickable-row{cursor:pointer}
+.clickable-row:hover td{background:var(--surface3)!important}
 </style>
 {% endblock %}
 {% block content %}
-<h1>🗳️ Constituents</h1>
-{% set pending = d.addrs|selectattr('status','ne','delivered')|list %}
+<h1>Constituents</h1>
+{% set pending   = d.addrs|selectattr('status','ne','delivered')|list %}
 {% set delivered = d.addrs|selectattr('status','equalto','delivered')|list %}
-{% set sign_req = d.addrs|selectattr('sign_requested','equalto',true)|list %}
-<p class="subtitle">{{ d.addrs|length }} total · {{ pending|length }} pending · {{ delivered|length }} placed</p>
+{% set sign_req  = d.addrs|selectattr('sign_requested','equalto',true)|list %}
+
 {% if d.addrs %}
 <div class="stat-row">
   <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value blue">{{ d.addrs|length }}</div></div>
@@ -30,7 +59,7 @@
 <details>
   <summary>📂 Import from CSV</summary>
   <div class="detail-body">
-    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have: address (or street_address), city, state, zip, first_name, last_name, phone, email</p>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">Supports: address, city, state, zip, first_name, last_name, phone, email, party, precinct, voter_id, support_score</p>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="import_csv">
       <input type="file" name="csv_file" accept=".csv" required>
@@ -40,28 +69,69 @@
 </details>
 
 <details>
-  <summary>➕ Add manually</summary>
+  <summary>➕ Add constituent</summary>
   <div class="detail-body">
     <form method="POST">
       <input type="hidden" name="action" value="add">
       <div class="grid2">
         <div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label>First Name</label><input type="text" name="first_name" placeholder="Jane"></div>
+            <div><label>Last Name</label><input type="text" name="last_name" placeholder="Smith"></div>
+          </div>
           <label>Street *</label><input type="text" name="street" placeholder="123 Oak St" required>
-          <label>Contact</label><input type="text" name="contact" placeholder="John Smith">
-          <label>Phone</label><input type="text" name="phone" placeholder="410-555-0100">
-          <label>Email</label><input type="text" name="email" placeholder="john@email.com">
-        </div>
-        <div>
           <div class="grid3">
             <div><label>City *</label><input type="text" name="city" placeholder="Baltimore" required></div>
             <div><label>State *</label><input type="text" name="state" placeholder="MD" required></div>
             <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201" required></div>
           </div>
-          <label>Note</label><input type="text" name="note" placeholder="e.g. leave at side door">
-          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer;color:#ddd">
-            <input type="checkbox" name="sign_requested" value="1" style="width:16px;height:16px">
-            <span>🪧 Sign requested</span>
-          </label>
+          <label>Phone</label><input type="text" name="phone" placeholder="410-555-0100">
+          <label>Email</label><input type="text" name="email" placeholder="jane@email.com">
+        </div>
+        <div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label>Party</label>
+              <select name="party">
+                <option value="">Unknown</option>
+                <option value="DEM">Democrat</option>
+                <option value="REP">Republican</option>
+                <option value="IND">Independent</option>
+                <option value="UNA">Unaffiliated</option>
+                <option value="GRN">Green</option>
+                <option value="LIB">Libertarian</option>
+              </select>
+            </div>
+            <div><label>Support (1–5)</label>
+              <select name="support_score">
+                <option value="">—</option>
+                <option value="5">5 — Strong support</option>
+                <option value="4">4 — Lean support</option>
+                <option value="3">3 — Undecided</option>
+                <option value="2">2 — Lean oppose</option>
+                <option value="1">1 — Strong oppose</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label>Precinct</label><input type="text" name="precinct" placeholder="12A"></div>
+            <div><label>Ward/District</label><input type="text" name="ward" placeholder="Ward 4"></div>
+          </div>
+          <label>Voter ID</label><input type="text" name="voter_id" placeholder="MD-1234567">
+          <label>Relationship</label>
+          <select name="relationship">
+            <option value="supporter">Supporter</option>
+            <option value="persuadable">Persuadable</option>
+            <option value="opposition">Opposition</option>
+            <option value="unknown">Unknown</option>
+          </select>
+          <label>Tags <span style="color:var(--text3);font-weight:400">(comma separated)</span></label>
+          <input type="text" name="tags" placeholder="yard sign, donor, volunteer">
+          <label>Note</label><input type="text" name="note" placeholder="Gate code: 1234">
+          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="sign_requested" value="1"> 🪧 Sign requested</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="volunteer_interest" value="1"> 🙋 Wants to volunteer</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="donor" value="1"> 💰 Donor</label>
+          </div>
         </div>
       </div>
       <br><button class="btn btn-primary" type="submit">Add Constituent</button>
@@ -71,109 +141,48 @@
 
 <hr class="divider">
 
-<!-- ══ SIGN REQUESTS ══ -->
-<div class="section-header">
-  <h2 style="margin:0">🪧 Sign Requests — {{ sign_req|length }}</h2>
-  <div></div>
-</div>
-{% if sign_req %}
-<div class="search-bar">
-  <input type="text" id="sr-search" placeholder="🔍 Search sign requests..." oninput="filterTable('sr-search','sr-tbody','sr-count')">
-</div>
-<p class="tbl-count" id="sr-count"></p>
-<div class="tbl-wrap">
-  <table class="tbl">
-    <thead><tr><th>Address</th><th>Contact</th><th>Phone</th><th>Email</th><th>Status</th><th>Note</th><th></th></tr></thead>
-    <tbody id="sr-tbody">
-    {% for a in sign_req %}
-    <tr>
-      <td>{{ a.address }}</td>
-      <td>{{ a.contact or '—' }}</td>
-      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" style="color:#4a9eff">{{ a.phone }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.email %}<a href="mailto:{{ a.email }}" style="color:#4a9eff">{{ a.email }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
-      <td>{{ a.note or '—' }}</td>
-      <td style="white-space:nowrap">
-        {% if a.status != 'delivered' %}
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="mark_delivered">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-success btn-sm" type="submit">✅</button>
-        </form>
-        {% endif %}
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Delete?')">✕</button>
-        </form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}
-<p style="color:#888;font-size:13px">No sign requests yet. Mark constituents as requesting a sign when adding them.</p>
-{% endif %}
-
-<hr class="divider">
-
-<!-- ══ ALL CONSTITUENTS ══ -->
+<!-- All Constituents table -->
 {% set all_emails = [] %}{% set all_phones = [] %}
 {% for a in d.addrs %}{% if a.email %}{% set _ = all_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = all_phones.append(a.phone) %}{% endif %}{% endfor %}
 
 <div class="section-header">
-  <h2 style="margin:0">📋 All Constituents — {{ d.addrs|length }}</h2>
+  <h2 style="margin:0">All Constituents — {{ d.addrs|length }}</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     {% if all_emails %}<a href="mailto:{{ all_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
     {% if all_phones %}<a href="sms:{{ all_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
     {% if d.addrs %}
-    <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export CSV</a>
-    <form method="POST" onsubmit="return confirm('Delete ALL constituents?')" style="display:inline">
+    <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export</a>
+    <form method="POST" onsubmit="return confirm('Delete ALL?')" style="display:inline">
       <input type="hidden" name="action" value="clear_all">
-      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All</button>
+      <button class="btn btn-danger btn-sm">🗑️ Clear All</button>
     </form>
     {% endif %}
   </div>
 </div>
-
 {% if d.addrs %}
 <div class="search-bar">
-  <input type="text" id="all-search" placeholder="🔍 Search address, contact, phone, note..." oninput="filterTable('all-search','all-tbody','all-count')">
+  <input type="text" id="all-search" placeholder="Search name, address, party, tags, precinct..." oninput="filterTable('all-search','all-tbody','all-count')">
 </div>
 <p class="tbl-count" id="all-count"></p>
 <div class="tbl-wrap">
   <table class="tbl">
-    <thead><tr><th>Status</th><th>Address</th><th>Contact</th><th>Phone</th><th>Sign?</th><th>Date</th><th>Note</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Address</th><th>Party</th><th>Score</th><th>Tags</th><th>Status</th><th></th></tr></thead>
     <tbody id="all-tbody">
     {% for a in d.addrs %}
-    <tr>
+    <tr class="clickable-row" onclick="openVoter({{ loop.index0 }})">
+      <td><strong>{{ a.contact or (a.first_name + ' ' + a.last_name)|trim or '—' }}</strong></td>
+      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
+      <td>{% if a.party %}<span class="badge {% if a.party=='DEM' %}badge-blue{% elif a.party=='REP' %}badge-orange{% else %}badge-gray{% endif %}">{{ a.party }}</span>{% else %}—{% endif %}</td>
+      <td>{% if a.support_score %}<span style="font-weight:700;color:{% if a.support_score=='5' or a.support_score==5 %}var(--accent){% elif a.support_score=='4' or a.support_score==4 %}var(--green){% elif a.support_score=='3' or a.support_score==3 %}var(--amber){% else %}var(--red){% endif %}">{{ a.support_score }}</span>{% else %}—{% endif %}</td>
+      <td>{% for t in (a.tags or [])[:2] %}<span class="tag-chip">{{ t }}</span> {% endfor %}{% if (a.tags or [])|length > 2 %}<span style="color:var(--text3);font-size:11px">+{{ (a.tags|length) - 2 }}</span>{% endif %}</td>
       <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
-      <td>{{ a.address }}</td>
-      <td>{{ a.contact or '—' }}</td>
-      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" style="color:#4a9eff">{{ a.phone }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.sign_requested %}<span style="color:#f59e0b">🪧</span>{% else %}—{% endif %}</td>
-      <td>{{ a.delivered_date or '—' }}</td>
-      <td>{{ a.note or '—' }}</td>
-      <td style="white-space:nowrap">
+      <td onclick="event.stopPropagation()" style="white-space:nowrap">
         {% if a.status != 'delivered' %}
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="mark_delivered">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-success btn-sm" type="submit" title="Mark placed">✅</button>
-        </form>
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="mark_delivered"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-success btn-sm">✅</button></form>
         {% else %}
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="undo_delivery">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-secondary btn-sm" type="submit" title="Undo">↩️</button>
-        </form>
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="undo_delivery"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">↩️</button></form>
         {% endif %}
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Delete?')">✕</button>
-        </form>
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
       </td>
     </tr>
     {% endfor %}
@@ -181,115 +190,228 @@
   </table>
 </div>
 {% else %}
-<div class="alert alert-info">No constituents yet. Import from CSV or add manually above.</div>
+<div class="alert alert-info">No constituents yet.</div>
 {% endif %}
 
 <hr class="divider">
 
-<!-- ══ PENDING ══ -->
+<!-- Sign Requests -->
+<div class="section-header">
+  <h2 style="margin:0">🪧 Sign Requests — {{ sign_req|length }}</h2>
+</div>
+{% if sign_req %}
+<div class="search-bar"><input type="text" id="sr-search" placeholder="Search sign requests..." oninput="filterTable('sr-search','sr-tbody','sr-count')"></div>
+<p class="tbl-count" id="sr-count"></p>
+<div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>Name</th><th>Address</th><th>Phone</th><th>Status</th><th></th></tr></thead>
+    <tbody id="sr-tbody">
+    {% for a in sign_req %}
+    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
+      <td><strong>{{ a.contact or '—' }}</strong></td>
+      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
+      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" onclick="event.stopPropagation()" style="color:var(--accent)">{{ a.phone }}</a>{% else %}—{% endif %}</td>
+      <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
+      <td onclick="event.stopPropagation()">
+        {% if a.status != 'delivered' %}
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="mark_delivered"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-success btn-sm">✅</button></form>
+        {% endif %}
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}<p style="color:var(--text3);font-size:13px">No sign requests yet.</p>{% endif %}
 
+<hr class="divider">
+
+<!-- Pending -->
 <div class="section-header">
   <h2 style="margin:0">⏳ Pending — {{ pending|length }}</h2>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if pending %}
-    <form method="POST" onsubmit="return confirm('Clear all pending?')" style="display:inline">
-      <input type="hidden" name="action" value="clear_pending">
-      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear Pending</button>
-    </form>
-    {% endif %}
-  </div>
+  {% if pending %}<form method="POST" onsubmit="return confirm('Clear all pending?')" style="display:inline"><input type="hidden" name="action" value="clear_pending"><button class="btn btn-danger btn-sm">🗑️ Clear Pending</button></form>{% endif %}
 </div>
 {% if pending %}
-<div class="search-bar">
-  <input type="text" id="pend-search" placeholder="🔍 Search pending..." oninput="filterTable('pend-search','pend-tbody','pend-count')">
-</div>
+<div class="search-bar"><input type="text" id="pend-search" placeholder="Search pending..." oninput="filterTable('pend-search','pend-tbody','pend-count')"></div>
 <p class="tbl-count" id="pend-count"></p>
 <div class="tbl-wrap">
   <table class="tbl">
-    <thead><tr><th>Address</th><th>Contact</th><th>Phone</th><th>Email</th><th>Sign?</th><th>Note</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Address</th><th>Party</th><th>Score</th><th>Sign?</th><th></th></tr></thead>
     <tbody id="pend-tbody">
     {% for a in pending %}
-    <tr>
-      <td>{{ a.address }}</td>
-      <td>{{ a.contact or '—' }}</td>
-      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" style="color:#4a9eff">{{ a.phone }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.email %}<a href="mailto:{{ a.email }}" style="color:#4a9eff">{{ a.email }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.sign_requested %}<span style="color:#f59e0b">🪧</span>{% else %}—{% endif %}</td>
-      <td>{{ a.note or '—' }}</td>
-      <td style="white-space:nowrap">
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="mark_delivered">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-success btn-sm" type="submit">✅</button>
-        </form>
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Delete?')">✕</button>
-        </form>
+    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
+      <td><strong>{{ a.contact or '—' }}</strong></td>
+      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
+      <td>{% if a.party %}<span class="badge badge-gray">{{ a.party }}</span>{% else %}—{% endif %}</td>
+      <td>{% if a.support_score %}<strong>{{ a.support_score }}</strong>{% else %}—{% endif %}</td>
+      <td>{% if a.sign_requested %}<span style="color:var(--orange)">🪧</span>{% else %}—{% endif %}</td>
+      <td onclick="event.stopPropagation()">
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="mark_delivered"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-success btn-sm">✅</button></form>
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
       </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
-{% else %}
-<p style="color:#888;font-size:13px">No pending addresses.</p>
-{% endif %}
+{% else %}<p style="color:var(--text3);font-size:13px">No pending addresses.</p>{% endif %}
 
 <hr class="divider">
 
-<!-- ══ PLACED ══ -->
-
+<!-- Placed -->
 <div class="section-header">
-  <h2 style="margin:0">✅ Signs Placed — {{ delivered|length }}</h2>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if delivered %}
-    <form method="POST" onsubmit="return confirm('Clear all delivered?')" style="display:inline">
-      <input type="hidden" name="action" value="clear_delivered">
-      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear Delivered</button>
-    </form>
-    {% endif %}
-  </div>
+  <h2 style="margin:0">✅ Placed — {{ delivered|length }}</h2>
+  {% if delivered %}<form method="POST" onsubmit="return confirm('Clear all delivered?')" style="display:inline"><input type="hidden" name="action" value="clear_delivered"><button class="btn btn-danger btn-sm">🗑️ Clear Delivered</button></form>{% endif %}
 </div>
 {% if delivered %}
-<div class="search-bar">
-  <input type="text" id="del-search" placeholder="🔍 Search placed signs..." oninput="filterTable('del-search','del-tbody','del-count')">
-</div>
+<div class="search-bar"><input type="text" id="del-search" placeholder="Search placed..." oninput="filterTable('del-search','del-tbody','del-count')"></div>
 <p class="tbl-count" id="del-count"></p>
 <div class="tbl-wrap">
   <table class="tbl">
-    <thead><tr><th>Address</th><th>Contact</th><th>Phone</th><th>Date Placed</th><th>Note</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Address</th><th>Date Placed</th><th>Note</th><th></th></tr></thead>
     <tbody id="del-tbody">
     {% for a in delivered %}
-    <tr>
-      <td>{{ a.address }}</td>
-      <td>{{ a.contact or '—' }}</td>
-      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" style="color:#4a9eff">{{ a.phone }}</a>{% else %}—{% endif %}</td>
+    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
+      <td><strong>{{ a.contact or '—' }}</strong></td>
+      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
       <td>{{ a.delivered_date or '—' }}</td>
-      <td>{{ a.note or '—' }}</td>
-      <td style="white-space:nowrap">
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="undo_delivery">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-secondary btn-sm" type="submit">↩️</button>
-        </form>
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="delete">
-          <input type="hidden" name="address" value="{{ a.address }}">
-          <button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Delete?')">✕</button>
-        </form>
+      <td style="color:var(--text3)">{{ a.note or '—' }}</td>
+      <td onclick="event.stopPropagation()">
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="undo_delivery"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">↩️</button></form>
+        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
       </td>
     </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
-{% else %}
-<p style="color:#888;font-size:13px">No signs placed yet.</p>
-{% endif %}
+{% else %}<p style="color:var(--text3);font-size:13px">No signs placed yet.</p>{% endif %}
+
+
+<!-- ══ VOTER PROFILE MODAL ══ -->
+<div class="modal-overlay hidden" id="voter-modal" onclick="if(event.target===this)closeVoter()">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-voter-name">Voter Profile</h2>
+      <div class="modal-close" onclick="closeVoter()">✕</div>
+    </div>
+    <div class="modal-body">
+      <form method="POST" id="voter-form">
+        <input type="hidden" name="action" value="update_voter">
+        <input type="hidden" name="voter_id_key" id="modal-voter-id-key">
+
+        <!-- Contact -->
+        <div class="modal-section">
+          <div class="modal-section-title">Contact Info</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>First Name</label><input type="text" name="first_name" id="mf-first_name"></div>
+            <div class="profile-field"><label>Last Name</label><input type="text" name="last_name" id="mf-last_name"></div>
+            <div class="profile-field"><label>Phone</label><input type="text" name="phone" id="mf-phone"></div>
+            <div class="profile-field"><label>Email</label><input type="text" name="email" id="mf-email"></div>
+            <div class="profile-field" style="grid-column:1/-1"><label>Address</label><input type="text" name="address_display" id="mf-address" disabled style="opacity:.6"></div>
+            <div class="profile-field"><label>Language</label><input type="text" name="language" id="mf-language" placeholder="English"></div>
+            <div class="profile-field"><label>Best Contact Time</label><input type="text" name="best_contact_time" id="mf-best_contact_time" placeholder="Evenings"></div>
+          </div>
+        </div>
+
+        <!-- Voter info -->
+        <div class="modal-section">
+          <div class="modal-section-title">Voter Profile</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Voter ID</label><input type="text" name="voter_id" id="mf-voter_id"></div>
+            <div class="profile-field"><label>Party</label>
+              <select name="party" id="mf-party">
+                <option value="">Unknown</option>
+                <option value="DEM">Democrat</option>
+                <option value="REP">Republican</option>
+                <option value="IND">Independent</option>
+                <option value="UNA">Unaffiliated</option>
+                <option value="GRN">Green</option>
+                <option value="LIB">Libertarian</option>
+              </select>
+            </div>
+            <div class="profile-field"><label>Precinct</label><input type="text" name="precinct" id="mf-precinct"></div>
+            <div class="profile-field"><label>Ward / District</label><input type="text" name="ward" id="mf-ward"></div>
+            <div class="profile-field"><label>Relationship</label>
+              <select name="relationship" id="mf-relationship">
+                <option value="supporter">Supporter</option>
+                <option value="persuadable">Persuadable</option>
+                <option value="opposition">Opposition</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div class="profile-field"><label>Support Score (1–5)</label>
+              <div style="display:flex;gap:6px;margin-top:4px">
+                {% for i in range(1,6) %}
+                <button type="button" class="score-btn" data-score="{{ i }}" onclick="setScore({{ i }})">{{ i }}</button>
+                {% endfor %}
+              </div>
+              <input type="hidden" name="support_score" id="mf-support_score">
+            </div>
+          </div>
+        </div>
+
+        <!-- Vote History -->
+        <div class="modal-section">
+          <div class="modal-section-title">Vote History</div>
+          <div class="vote-grid">
+            {% for label, field in [('2024 Gen','voted_2024g'),('2024 Pri','voted_2024p'),('2022 Gen','voted_2022g'),('2022 Pri','voted_2022p'),('2020 Gen','voted_2020g')] %}
+            <div class="vote-box">
+              <label>{{ label }}</label>
+              <input type="checkbox" name="{{ field }}" value="1" id="mf-{{ field }}" style="width:18px;height:18px">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Engagement -->
+        <div class="modal-section">
+          <div class="modal-section-title">Engagement</div>
+          <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="sign_requested" value="1" id="mf-sign_requested"> 🪧 Sign requested</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="volunteer_interest" value="1" id="mf-volunteer_interest"> 🙋 Volunteer interest</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="donor" value="1" id="mf-donor"> 💰 Donor</label>
+          </div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Donation Amount</label><input type="text" name="donation_amount" id="mf-donation_amount" placeholder="$0.00"></div>
+            <div class="profile-field"><label>Tags <span style="font-weight:400">(comma separated)</span></label><input type="text" name="tags" id="mf-tags" placeholder="yard sign, donor"></div>
+          </div>
+        </div>
+
+        <!-- Canvass -->
+        <div class="modal-section">
+          <div class="modal-section-title">Canvass / Field Notes</div>
+          <div class="profile-grid">
+            <div class="profile-field"><label>Last Canvass Result</label>
+              <select name="canvass_result" id="mf-canvass_result">
+                <option value="">—</option>
+                <option value="contacted">Contacted</option>
+                <option value="not_home">Not Home</option>
+                <option value="refused">Refused</option>
+                <option value="moved">Moved</option>
+                <option value="deceased">Deceased</option>
+                <option value="bad_address">Bad Address</option>
+              </select>
+            </div>
+            <div class="profile-field"><label>Canvass Date</label><input type="text" name="canvass_date" id="mf-canvass_date" placeholder="Mar 5, 2026"></div>
+            <div class="profile-field"><label>Canvassed By</label><input type="text" name="canvassed_by" id="mf-canvassed_by"></div>
+            <div class="profile-field"><label>Note</label><input type="text" name="note" id="mf-note"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+          <button type="button" class="btn btn-secondary" onclick="closeVoter()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <script>
+const ALL_VOTERS = {{ d.addrs|tojson }};
+
 function filterTable(searchId, tbodyId, countId) {
   const q = document.getElementById(searchId).value.toLowerCase();
   const rows = document.getElementById(tbodyId).querySelectorAll('tr');
@@ -302,10 +424,65 @@ function filterTable(searchId, tbodyId, countId) {
   const el = document.getElementById(countId);
   if (el) el.textContent = q ? `Showing ${visible} of ${rows.length}` : `${rows.length} total`;
 }
-// Init counts
 ['sr','all','pend','del'].forEach(id => {
   const s = document.getElementById(id+'-search');
   if (s) filterTable(id+'-search', id+'-tbody', id+'-count');
 });
+
+function openVoter(idx) { populateModal(ALL_VOTERS[idx]); }
+function openVoterById(id) {
+  const v = ALL_VOTERS.find(a => a.id === id);
+  if (v) populateModal(v);
+}
+
+function populateModal(v) {
+  document.getElementById('modal-voter-name').textContent =
+    v.contact || ((v.first_name||'') + ' ' + (v.last_name||'')).trim() || v.address;
+  document.getElementById('modal-voter-id-key').value = v.id;
+
+  // Text fields
+  ['first_name','last_name','phone','email','language','best_contact_time',
+   'voter_id','party','precinct','ward','relationship','support_score',
+   'donation_amount','tags','canvass_result','canvass_date','canvassed_by','note'].forEach(f => {
+    const el = document.getElementById('mf-'+f);
+    if (!el) return;
+    if (el.tagName === 'SELECT') el.value = v[f] || '';
+    else el.value = Array.isArray(v[f]) ? v[f].join(', ') : (v[f] || '');
+  });
+
+  // Address (display only)
+  document.getElementById('mf-address').value = v.address || '';
+
+  // Checkboxes
+  ['sign_requested','volunteer_interest','donor',
+   'voted_2024g','voted_2024p','voted_2022g','voted_2022p','voted_2020g'].forEach(f => {
+    const el = document.getElementById('mf-'+f);
+    if (el) el.checked = !!v[f];
+  });
+
+  // Score buttons
+  const score = parseInt(v.support_score) || 0;
+  document.querySelectorAll('.score-btn').forEach(btn => {
+    const s = parseInt(btn.dataset.score);
+    btn.className = 'score-btn' + (s === score ? ` active-${s}` : '');
+  });
+
+  document.getElementById('voter-modal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function setScore(n) {
+  document.getElementById('mf-support_score').value = n;
+  document.querySelectorAll('.score-btn').forEach(btn => {
+    const s = parseInt(btn.dataset.score);
+    btn.className = 'score-btn' + (s === n ? ` active-${s}` : '');
+  });
+}
+
+function closeVoter() {
+  document.getElementById('voter-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVoter(); });
 </script>
 {% endblock %}
