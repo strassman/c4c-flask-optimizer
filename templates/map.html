@@ -4,199 +4,346 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-#map{height:calc(100vh - 200px);border-radius:10px;border:1px solid #2d3148}
-.map-legend{display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.legend-item{display:flex;align-items:center;gap:6px;font-size:13px;color:#aaa}
-.legend-dot{width:12px;height:12px;border-radius:50%;display:inline-block}
-.view-btns{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.view-btn{padding:6px 14px;border-radius:6px;border:1px solid #3d4168;background:#1a1d27;color:#aaa;cursor:pointer;font-size:13px;transition:all .15s}
-.view-btn:hover{background:#2d3148;color:#fff}
-.view-btn.active{background:#4a9eff;border-color:#4a9eff;color:#fff}
+.map-wrap { position: relative; }
+#map { height: calc(100vh - 178px); border-radius: var(--radius-lg); border: 1px solid var(--border); }
+
+/* Drawer */
+.drawer-toggle {
+  position: absolute; top: 12px; left: 12px; z-index: 500;
+  background: rgba(14,17,23,0.92); backdrop-filter: blur(12px);
+  border: 1px solid var(--border2); border-radius: var(--radius);
+  padding: 8px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500; color: var(--text); font-family: inherit;
+  transition: border-color .15s;
+}
+.drawer-toggle:hover { border-color: var(--accent); }
+.drawer-toggle .run-badge {
+  background: var(--accent); color: #fff;
+  border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600;
+}
+
+.drawer {
+  position: absolute; top: 0; left: 0; z-index: 600;
+  width: 340px; height: 100%;
+  background: rgba(8,10,15,0.97); backdrop-filter: blur(20px);
+  border-right: 1px solid var(--border2);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  display: flex; flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+.drawer.open { transform: translateX(0); }
+
+.drawer-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-header h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 10px; }
+.drawer-search {
+  width: 100%; padding: 8px 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
+  font-family: inherit; outline: none;
+}
+.drawer-search:focus { border-color: var(--accent); }
+.drawer-close {
+  position: absolute; top: 14px; right: 14px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text2); font-size: 14px;
+  transition: all .15s;
+}
+.drawer-close:hover { background: var(--surface3); color: var(--text); }
+
+.filter-tabs {
+  display: flex; gap: 4px; padding: 8px 18px;
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.filter-tab {
+  padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  cursor: pointer; color: var(--text2); transition: all .15s; border: none;
+  background: transparent; font-family: inherit;
+}
+.filter-tab.active { background: var(--surface2); color: var(--text); }
+
+.runs-list { flex: 1; overflow-y: auto; padding: 10px; }
+
+.run-item {
+  padding: 12px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 8px;
+  cursor: pointer; transition: all .15s; background: var(--surface);
+}
+.run-item:hover { border-color: var(--border2); background: var(--surface2); }
+.run-item.selected { border-color: var(--accent); background: rgba(79,142,247,.08); }
+.run-item.complete { opacity: .6; }
+
+.run-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.run-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.run-status-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px;
+}
+.dot-active   { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot-complete { background: var(--text3); }
+
+.run-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.run-meta-chip {
+  font-size: 11px; color: var(--text3);
+  background: var(--surface2); padding: 2px 8px; border-radius: 10px;
+}
+
+.progress-bar { height: 3px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+.run-vols { font-size: 12px; color: var(--text2); margin-top: 6px; }
+
+/* Map view controls */
+.map-controls {
+  position: absolute; top: 12px; right: 12px; z-index: 400;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.map-ctrl-btn {
+  background: rgba(14,17,23,0.92); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 500;
+  color: var(--text2); font-family: inherit; transition: all .15s; white-space: nowrap;
+  display: flex; align-items: center; gap: 6px;
+}
+.map-ctrl-btn:hover { border-color: var(--border2); color: var(--text); }
+.map-ctrl-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* Legend */
+.map-legend {
+  position: absolute; bottom: 16px; left: 16px; z-index: 400;
+  background: rgba(14,17,23,0.92); backdrop-filter: blur(12px);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; max-width: 220px;
+}
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-empty { display: none; }
 </style>
 {% endblock %}
 {% block content %}
-<h1 style="margin-bottom:8px">🗺️ Map</h1>
 
-<!-- View switcher -->
-<div class="view-btns">
-  {% if routes and not prox %}
-  <button class="view-btn active" onclick="showView('route')">📍 Active Routes</button>
-  {% elif prox %}
-  <button class="view-btn active" onclick="showView('prox')">📅 Proximity Clusters</button>
-  {% endif %}
-  {% if d.history %}
-  <button class="view-btn" id="btn-pending" onclick="showView('pending')">⏳ Pending Assignments</button>
-  {% endif %}
-  <button class="view-btn {% if not routes and not prox %}active{% endif %}" onclick="showView('master')">🗺️ Master Map</button>
-  {% if routes or prox %}
-  <a href="/map/reset" class="view-btn" style="text-decoration:none">✕ Clear Routes</a>
-  {% endif %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h1 style="margin-bottom:2px">Map</h1>
+    {% if active_run %}
+    <p class="subtitle" style="margin:0">
+      Viewing: <strong>{{ active_run.name }}</strong>
+      <span style="color:var(--text3)">· {{ active_run.pct if active_run.pct is defined else 0 }}% complete</span>
+    </p>
+    {% else %}
+    <p class="subtitle" style="margin:0">All constituents</p>
+    {% endif %}
+  </div>
 </div>
 
-<!-- Legend -->
-<div class="map-legend" id="legend"></div>
-<div id="map"></div>
+<div class="map-wrap">
+  <!-- Drawer toggle -->
+  <button class="drawer-toggle" onclick="toggleDrawer()">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
+    Active Runs
+    <span class="run-badge">{{ runs|selectattr('status','equalto','active')|list|length }}</span>
+  </button>
+
+  <!-- Slide-out drawer -->
+  <div class="drawer" id="runs-drawer">
+    <div class="drawer-header">
+      <h3>Delivery Runs</h3>
+      <input class="drawer-search" id="drawer-search" placeholder="Search runs, volunteers, dates..." oninput="filterRuns(this.value)">
+      <div class="drawer-close" onclick="toggleDrawer()">✕</div>
+    </div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-tab" onclick="setFilter('active',this)">Active</button>
+      <button class="filter-tab" onclick="setFilter('complete',this)">Complete</button>
+    </div>
+    <div class="runs-list" id="runs-list">
+      {% if not runs %}
+      <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">
+        No runs yet. Use Delivery Run to create one.
+      </div>
+      {% endif %}
+      {% for run in runs %}
+      {% set done_ct = run.done_count if run.done_count is defined else 0 %}
+      {% set pct = run.pct if run.pct is defined else 0 %}
+      <div class="run-item {% if active_run and run.id == active_run.id %}selected{% endif %} {% if run.status=='complete' %}complete{% endif %}"
+           data-run-id="{{ run.id }}"
+           data-status="{{ run.status }}"
+           data-search="{{ run.name|lower }} {{ run.timestamp|lower }} {{ run.vol_names|join(' ')|lower }}"
+           onclick="selectRun('{{ run.id }}')">
+        <div class="run-item-header">
+          <div class="run-name">{{ run.name }}</div>
+          <div class="run-status-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></div>
+        </div>
+        <div class="run-meta">
+          <span class="run-meta-chip">{{ run.timestamp[:6] if run.timestamp else '—' }}</span>
+          <span class="run-meta-chip">{{ run.routes|length }} vol{% if run.routes|length!=1%}s{% endif %}</span>
+          <span class="run-meta-chip">{{ run.total_stops }} stops</span>
+          <span class="run-meta-chip">{{ run.type }}</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div>
+        </div>
+        <div class="progress-label">
+          <span>{{ done_ct }}/{{ run.total_stops }} done</span>
+          <span>{{ pct }}%</span>
+        </div>
+        {% if run.vol_names %}
+        <div class="run-vols">{{ run.vol_names|join(', ') }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Map view controls -->
+  <div class="map-controls">
+    {% if active_run %}
+    <button class="map-ctrl-btn active" onclick="showView('run')">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg>
+      Active Run
+    </button>
+    <button class="map-ctrl-btn" id="btn-pending" onclick="showView('pending')">⏳ Pending Only</button>
+    {% endif %}
+    <button class="map-ctrl-btn {% if not active_run %}active{% endif %}" id="btn-master" onclick="showView('master')">🗺 All Stops</button>
+  </div>
+
+  <!-- Legend -->
+  <div class="map-legend" id="map-legend"></div>
+
+  <div id="map"></div>
+</div>
 
 <script>
-const HEX_COLORS = {{ HEX_COLORS|tojson }};
-const routes     = {{ routes|tojson }};
-const prox       = {{ prox|tojson if prox else 'null' }};
-const allAddrs   = {{ d.addrs|tojson }};
-const doneKeys   = {{ done_keys|tojson if done_keys is defined else '[]' }};
+const HEX_COLORS  = {{ HEX_COLORS|tojson }};
+const allAddrs    = {{ d.addrs|tojson }};
+const activeRun   = {{ active_run|tojson if active_run else 'null' }};
+const allRuns     = {{ runs|tojson }};
 
-const map = L.map('map', {preferCanvas: true}).setView([39.2904, -76.6122], 11);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '©OpenStreetMap ©CartoDB', maxZoom: 19
+// ── Map init ───────────────────────────────────────────────────────────────
+const map = L.map('map', {preferCanvas:true, zoomControl:false}).setView([39.2904,-76.6122],11);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'©OpenStreetMap ©CartoDB', maxZoom:19
 }).addTo(map);
 
-let currentLayers = [];
-function clearLayers() {
-  currentLayers.forEach(l => map.removeLayer(l));
-  currentLayers = [];
+let layers = [];
+function clearLayers(){ layers.forEach(l=>map.removeLayer(l)); layers=[]; }
+function addLayer(l){ l.addTo(map); layers.push(l); return l; }
+function fitBounds(pts){ if(pts.length) map.fitBounds(pts,{padding:[40,40]}); }
+function setLegend(html){ document.getElementById('map-legend').innerHTML = html || ''; }
+
+// ── Drawer ─────────────────────────────────────────────────────────────────
+let drawerOpen = false;
+let currentFilter = 'all';
+let currentSearch = '';
+
+function toggleDrawer(){
+  drawerOpen = !drawerOpen;
+  document.getElementById('runs-drawer').classList.toggle('open', drawerOpen);
 }
-function addLayer(l) { l.addTo(map); currentLayers.push(l); return l; }
-function fitBounds(pts) {
-  if (pts.length > 0) map.fitBounds(pts, {padding:[30,30]});
+function setFilter(f, el){
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  applyFilters();
 }
-function setLegend(html) {
-  document.getElementById('legend').innerHTML = html;
-}
-function setActiveBtn(view) {
-  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('btn-'+view);
-  if (btn) btn.classList.add('active');
+function filterRuns(q){ currentSearch = q.toLowerCase(); applyFilters(); }
+function applyFilters(){
+  document.querySelectorAll('.run-item').forEach(el=>{
+    const statusOk = currentFilter==='all' || el.dataset.status===currentFilter;
+    const searchOk = !currentSearch || el.dataset.search.includes(currentSearch);
+    el.style.display = (statusOk && searchOk) ? '' : 'none';
+  });
 }
 
-function showView(view) {
+function selectRun(runId){
+  window.location.href = '/map/select/' + runId;
+}
+
+// ── Map views ──────────────────────────────────────────────────────────────
+function volIcon(hex, emoji='🏠'){
+  return L.divIcon({
+    html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.5)">${emoji}</div>`,
+    iconSize:[28,28],iconAnchor:[14,14],className:''
+  });
+}
+function stopIcon(hex, num, done=false){
+  if(done) return L.divIcon({
+    html:`<div style="background:#34c759;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;box-shadow:0 2px 6px rgba(52,199,89,.4)">✓</div>`,
+    iconSize:[24,24],iconAnchor:[12,12],className:''
+  });
+  return L.divIcon({
+    html:`<div style="background:#fff;color:${hex};border:2.5px solid ${hex};border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;box-shadow:0 2px 5px rgba(0,0,0,.3)">${num}</div>`,
+    iconSize:[26,26],iconAnchor:[13,13],className:''
+  });
+}
+
+function showView(view){
   clearLayers();
-  const bounds = [];
+  const bounds=[];
+  let legendHtml='';
 
-  if (view === 'route' && routes.length) {
-    setActiveBtn('route');
-    let legendHtml = '';
-    routes.forEach((r, ri) => {
-      const vol = r.volunteer; const hex = r.hex;
-      if (!vol.lat) return;
-      bounds.push([vol.lat, vol.lng]);
-      legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong> — ${r.stops.length} stops${r.distance_miles !== '—' ? ' · '+r.distance_miles+' mi' : ''}</div>`;
-      addLayer(L.marker([vol.lat,vol.lng], {icon: L.divIcon({
-        html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 6px rgba(0,0,0,.5)">🏠</div>`,
-        iconSize:[28,28],iconAnchor:[14,14],className:''
-      })}).bindPopup(`<b>Home: ${vol.name}</b><br>${vol.address}`));
-      if (r.road_geometry && r.road_geometry.length)
-        addLayer(L.polyline(r.road_geometry, {color:hex,weight:4,opacity:.8}).bindTooltip(`${vol.name}`));
-      r.stops.forEach((s,i) => {
-        if (!s.lat) return;
-        bounds.push([s.lat,s.lng]);
-        const done = doneKeys.includes(vol.name+'_'+i);
-        if (done) {
-          addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({html:`<div style="background:#22c55e;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>`,iconSize:[24,24],iconAnchor:[12,12],className:''})}).bindPopup(`<b>✅ ${s.address}</b>`));
-        } else {
-          addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({html:`<div style="background:white;color:${hex};border:2px solid ${hex};border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;">${i+1}</div>`,iconSize:[26,26],iconAnchor:[13,13],className:''})}).bindPopup(`<b>Stop ${i+1} — ${vol.name}</b><br>${s.address}`));
-        }
-      });
-    });
-    setLegend(legendHtml);
+  document.querySelectorAll('.map-ctrl-btn').forEach(b=>b.classList.remove('active'));
+  const btnMap = {run:'btn-run',pending:'btn-pending',master:'btn-master'};
+  const btn = document.getElementById(btnMap[view]||'btn-master');
+  if(btn) btn.classList.add('active');
 
-  } else if (view === 'pending') {
-    setActiveBtn('pending');
-    let legendHtml = '';
-    let pendingCount = 0;
-    const allPending = {{ all_pending_routes|tojson }};
-    allPending.forEach((r) => {
-      const vol = r.volunteer; const hex = r.hex;
-      if (!vol.lat) return;
-      let volPending = 0;
-      r.stops_with_index.forEach((si) => {
-        const s = si.stop; const i = si.index;
-        if (!s.lat) return;
-        volPending++; pendingCount++;
-        bounds.push([s.lat, s.lng]);
-        const contact = s.contact ? `<br>👤 ${s.contact}` : '';
-        const phone   = s.phone   ? `<br>📞 ${s.phone}`   : '';
-        const note    = s.note    ? `<br>📝 ${s.note}`     : '';
-        const dir     = `https://www.google.com/maps/dir/${encodeURIComponent(vol.address)}/${encodeURIComponent(s.address)}`;
-        addLayer(L.marker([s.lat,s.lng], {icon:L.divIcon({
-          html:`<div style="background:${hex};color:white;border:2px solid white;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;box-shadow:0 2px 5px rgba(0,0,0,.4)">${i+1}</div>`,
-          iconSize:[28,28],iconAnchor:[14,14],className:''
-        })}).bindPopup(`
-          <b>Stop ${i+1} — ⏳ Pending</b><br>
-          ${s.address}${contact}${phone}${note}<br>
-          <b style="color:${hex}">👤 Assigned: ${vol.name}</b><br>
-          <a href="${dir}" target="_blank">📍 Directions</a>
-        `, {maxWidth:260}));
-      });
-      if (volPending > 0) {
-        legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong> — ${volPending} pending</div>`;
-        if (vol.lat) {
-          bounds.push([vol.lat, vol.lng]);
-          addLayer(L.marker([vol.lat,vol.lng], {icon:L.divIcon({
-            html:`<div style="background:${hex};width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;opacity:.7;">🏠</div>`,
-            iconSize:[24,24],iconAnchor:[12,12],className:''
-          })}).bindPopup(`<b>${vol.name}</b>`));
-        }
-      }
-    });
-    if (pendingCount === 0) {
-      setLegend('<span style="color:#22c55e">✅ All stops completed!</span>');
-    } else {
-      setLegend(legendHtml + `<div class="legend-item" style="margin-left:auto"><span style="color:#f59e0b;font-weight:600">${pendingCount} pending total</span></div>`);
-    }
-
-  } else if (view === 'prox' && prox) {
-    setActiveBtn('prox');
-    let legendHtml = '';
-    prox.volunteers.forEach((vol, vi) => {
-      if (!vol.lat) return;
-      const hex = HEX_COLORS[vi % HEX_COLORS.length];
+  if((view==='run'||view==='pending') && activeRun){
+    const doneSet = new Set(activeRun.done_keys||[]);
+    activeRun.routes.forEach((r,ri)=>{
+      const vol=r.volunteer; const hex=r.hex||HEX_COLORS[ri%HEX_COLORS.length];
+      if(!vol.lat) return;
       bounds.push([vol.lat,vol.lng]);
-      legendHtml += `<div class="legend-item"><span class="legend-dot" style="background:${hex}"></span><strong>${vol.name}</strong></div>`;
-      addLayer(L.marker([vol.lat,vol.lng], {icon:L.divIcon({html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;">🏠</div>`,iconSize:[28,28],iconAnchor:[14,14],className:''})}).bindPopup(`<b>${vol.name}</b>`));
-      (prox.clusters[vi]||[]).forEach(s => {
-        if (!s.lat) return;
+      addLayer(L.marker([vol.lat,vol.lng],{icon:volIcon(hex)}).bindPopup(`<b>🏠 ${vol.name}</b><br><small>${vol.address}</small>`));
+      if(view==='run' && r.road_geometry && r.road_geometry.length)
+        addLayer(L.polyline(r.road_geometry,{color:hex,weight:4,opacity:.75}));
+      let pending=0;
+      r.stops.forEach((s,i)=>{
+        if(!s.lat) return;
+        const key=vol.name+'_'+i;
+        const done=doneSet.has(key);
+        if(view==='pending' && done) return;
         bounds.push([s.lat,s.lng]);
-        addLayer(L.circleMarker([s.lat,s.lng],{radius:9,color:hex,fillColor:hex,fillOpacity:.7,weight:2}).bindPopup(`<b>${s.address}</b><br>→ ${vol.name}`));
-        addLayer(L.polyline([[vol.lat,vol.lng],[s.lat,s.lng]],{color:hex,weight:1.5,opacity:.3,dashArray:'6'}));
+        const contact=s.contact?`<br>👤 ${s.contact}`:'';
+        const phone=s.phone?`<br>📞 ${s.phone}`:'';
+        const note=s.note?`<br>📝 ${s.note}`:'';
+        const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address)}/${encodeURIComponent(s.address)}`;
+        addLayer(L.marker([s.lat,s.lng],{icon:stopIcon(hex,i+1,done)})
+          .bindPopup(`<b>Stop ${i+1}${done?' ✅':''}</b><br>${s.address}${contact}${phone}${note}<br><b style="color:${hex}">${vol.name}</b><br><a href="${dir}" target="_blank">📍 Directions</a>`,{maxWidth:240}));
+        if(!done) pending++;
       });
+      const pct=activeRun.pct||0;
+      legendHtml+=`<div class="legend-row"><span class="legend-dot" style="background:${hex}"></span><span>${vol.name} · ${view==='pending'?pending+' pending':r.stops.length+' stops'}</span></div>`;
     });
-    setLegend(legendHtml);
+    if(legendHtml) setLegend(legendHtml);
+    else setLegend('<div class="legend-row" style="color:var(--green)">✅ All stops complete!</div>');
 
   } else {
-    // Master map
-    setActiveBtn('master');
-    allAddrs.forEach(a => {
-      if (!a.lat) return;
+    // Master map — all constituents
+    allAddrs.forEach(a=>{
+      if(!a.lat) return;
       bounds.push([a.lat,a.lng]);
-      if (a.status === 'delivered') {
-        addLayer(L.marker([a.lat,a.lng], {icon:L.divIcon({html:`<div style="background:#22c55e;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;">✓</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''})}).bindPopup(`<b>✅ ${a.address}</b><br>${a.delivered_date||''}`));
+      if(a.status==='delivered'){
+        addLayer(L.marker([a.lat,a.lng],{icon:L.divIcon({html:`<div style="background:#34c759;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff">✓</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''})})
+          .bindPopup(`<b>✅ ${a.address}</b><br><small>${a.delivered_date||''}</small>`));
       } else {
-        addLayer(L.circleMarker([a.lat,a.lng],{radius:8,color:'#888',fillColor:'#bbb',fillOpacity:.85,weight:2}).bindPopup(`<b>⏳ ${a.address}</b>`));
+        addLayer(L.circleMarker([a.lat,a.lng],{radius:7,color:'#535a6b',fillColor:'#8b92a5',fillOpacity:.8,weight:1.5})
+          .bindPopup(`<b>⏳ ${a.address}</b>`));
       }
     });
-    setLegend('<div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Sign placed</div><div class="legend-item"><span class="legend-dot" style="background:#888"></span>Pending</div>');
+    setLegend(`<div class="legend-row"><span class="legend-dot" style="background:#34c759"></span>Sign placed</div><div class="legend-row"><span class="legend-dot" style="background:#8b92a5"></span>Pending</div>`);
   }
-
   fitBounds(bounds);
 }
 
-// Auto-show best default view on load
-{% if routes and not prox %}
-showView('route');
-document.getElementById('btn-route') && document.getElementById('btn-route').classList.add('active');
-{% elif prox %}
-showView('prox');
-{% else %}
-showView('master');
-{% endif %}
-
-// Add IDs to buttons for active state management
-document.querySelectorAll('.view-btn').forEach(b => {
-  if (!b.id) {
-    const txt = b.textContent.trim();
-    if (txt.includes('Active Routes')) b.id = 'btn-route';
-    else if (txt.includes('Proximity')) b.id = 'btn-prox';
-    else if (txt.includes('Master')) b.id = 'btn-master';
-  }
-});
+// Auto-load best view
+{% if active_run %}showView('run');{% else %}showView('master');{% endif %}
 </script>
 {% endblock %}
