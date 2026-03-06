@@ -351,6 +351,7 @@ def constituents():
                     "phone":request.form.get("phone","").strip(),
                     "email":request.form.get("email","").strip(),
                     "note":request.form.get("note","").strip(),
+                    "sign_requested": request.form.get("sign_requested") == "1",
                     "status":"pending"}
                 lat,lng = geocode(addr)
                 if lat: entry["lat"]=lat; entry["lng"]=lng
@@ -635,6 +636,40 @@ def routes_page():
         return redirect(url_for("routes_page"))
     done = {c["key"]:c for c in session.get("done",[])}
     return render_template("routes.html", d=d, done=done, gmaps_url=gmaps_url)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ROUTE SEARCH
+# ══════════════════════════════════════════════════════════════════════════════
+@app.route("/routes/search")
+@login_required
+def routes_search():
+    d     = get_data()
+    q     = request.args.get("q","").lower().strip()
+    done  = {c["key"]:c for c in session.get("done",[])}
+    results = []
+    if q:
+        for rec in d["history"]:
+            for r in rec.get("routes",[]):
+                vol = r.get("volunteer",{})
+                matched_stops = []
+                for i,s in enumerate(r.get("stops",[])):
+                    if (q in s.get("address","").lower() or
+                        q in s.get("contact","").lower() or
+                        q in s.get("phone","").lower() or
+                        q in vol.get("name","").lower() or
+                        q in rec.get("timestamp","").lower()):
+                        matched_stops.append({"stop":s,"index":i,
+                            "key":vol.get("name","")+"_"+str(i),
+                            "done": (vol.get("name","")+"_"+str(i)) in done})
+                if matched_stops or q in vol.get("name","").lower():
+                    if not matched_stops:
+                        matched_stops = [{"stop":s,"index":i,
+                            "key":vol.get("name","")+"_"+str(i),
+                            "done":(vol.get("name","")+"_"+str(i)) in done}
+                            for i,s in enumerate(r.get("stops",[]))]
+                    results.append({"timestamp":rec.get("timestamp",""),
+                        "volunteer":vol,"stops":matched_stops,"hex":r.get("hex","#4a9eff")})
+    return render_template("routes_search.html", d=d, q=q, results=results, gmaps_url=gmaps_url)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # EMAILS & TEXTS
