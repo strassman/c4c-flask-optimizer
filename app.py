@@ -314,7 +314,7 @@ def detect_col(cols, key):
 def get_integrations(cid: str) -> dict:
     """Load all integration records for a campaign. Returns dict keyed by provider."""
     try:
-        rows = db().table("campaign_integrations")                    .select("*").eq("campaign_id", cid).execute().data
+        rows = db().table("campaign_integrations").select("*").eq("campaign_id", cid).execute().data
         return {r["provider"]: r for r in rows}
     except Exception:
         return {}
@@ -333,7 +333,7 @@ def save_integration(cid: str, provider: str, data: dict):
 def delete_integration(cid: str, provider: str):
     """Remove an integration (disconnect)."""
     try:
-        db().table("campaign_integrations")             .delete().eq("campaign_id", cid).eq("provider", provider).execute()
+        db().table("campaign_integrations").delete().eq("campaign_id", cid).eq("provider", provider).execute()
     except Exception as e:
         print(f"delete_integration error: {e}", flush=True)
 
@@ -1330,12 +1330,16 @@ def get_run_by_token(run_id: str, vol_token: str):
 def upload_photo(cid: str, run_id: str, stop_key: str, file_bytes: bytes, mime: str) -> str:
     """Upload a sign photo to Supabase Storage. Returns public URL or ''."""
     try:
-        path = f"{cid}/{run_id}/{stop_key}_{uuid.uuid4().hex[:8]}.jpg"
+        # Sanitize path — remove spaces and special chars from stop_key
+        safe_key = stop_key.replace(" ", "_").replace("/", "_")
+        path = f"{cid}/{run_id}/{safe_key}_{uuid.uuid4().hex[:8]}.jpg"
+        print(f"upload_photo: uploading to path={path} size={len(file_bytes)} mime={mime}", flush=True)
         db().storage.from_(SUPABASE_BUCKET).upload(
             path, file_bytes,
             {"content-type": mime, "cache-control": "3600", "upsert": "true"}
         )
         url = db().storage.from_(SUPABASE_BUCKET).get_public_url(path)
+        print(f"upload_photo: success url={url}", flush=True)
         return url
     except Exception as e:
         print(f"upload_photo error: {e}", flush=True)
@@ -1364,7 +1368,7 @@ def save_photo_record(cid: str, run_id: str, stop_key: str, vol_name: str,
 
 def get_photos(cid: str) -> list:
     try:
-        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_sign_photos").execute().data
+        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_sign_photos").execute().data
         return rows[0]["data"] if rows else []
     except:
         return []
@@ -1401,7 +1405,7 @@ def vol_deliver(run_id, vol_token):
         if action == "mark_done" and stop_key:
             # Load run from DB, update done_keys, save back
             try:
-                rows = db().table("campaign_data").select("data")                            .eq("id", f"{cid}_runs").execute().data
+                rows = db().table("campaign_data").select("data").eq("id", f"{cid}_runs").execute().data
                 runs = rows[0]["data"] if rows else []
                 for r in runs:
                     if r["id"] == run_id:
@@ -1413,7 +1417,7 @@ def vol_deliver(run_id, vol_token):
                         if len(dk) >= total:
                             r["status"] = "complete"
                         # Also mark constituent as delivered
-                        addr_rows = db().table("campaign_data").select("data")                                         .eq("id", f"{cid}_addrs").execute().data
+                        addr_rows = db().table("campaign_data").select("data").eq("id", f"{cid}_addrs").execute().data
                         addrs = addr_rows[0]["data"] if addr_rows else []
                         stop_idx = int(stop_key.split("_")[-1])
                         stop_addr = vol_route["stops"][stop_idx]["address"] if stop_idx < len(vol_route["stops"]) else ""
@@ -1443,7 +1447,7 @@ def vol_deliver(run_id, vol_token):
                                       float(lng) if lng else None)
                     # Also auto-mark the stop done and mark constituent delivered
                     try:
-                        rows = db().table("campaign_data").select("data")                                    .eq("id", f"{cid}_runs").execute().data
+                        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_runs").execute().data
                         runs = rows[0]["data"] if rows else []
                         for r in runs:
                             if r["id"] == run_id:
@@ -1453,7 +1457,7 @@ def vol_deliver(run_id, vol_token):
                                 if len(dk) >= r.get("total_stops", 1):
                                     r["status"] = "complete"
                                 # Mark constituent delivered — use rsplit to handle spaces in vol name
-                                addr_rows = db().table("campaign_data").select("data")                                                .eq("id", f"{cid}_addrs").execute().data
+                                addr_rows = db().table("campaign_data").select("data").eq("id", f"{cid}_addrs").execute().data
                                 addrs = addr_rows[0]["data"] if addr_rows else []
                                 parts = stop_key.rsplit("_", 1)
                                 stop_idx = int(parts[-1]) if len(parts) == 2 and parts[-1].isdigit() else -1
@@ -1466,6 +1470,7 @@ def vol_deliver(run_id, vol_token):
                                             a["delivered_by"] = vol_name
                                 db().table("campaign_data").upsert({"id": f"{cid}_runs",  "data": runs}).execute()
                                 db().table("campaign_data").upsert({"id": f"{cid}_addrs", "data": addrs}).execute()
+                                db().table("campaign_data").upsert({"id": f"{cid}_cache_bust", "data": {"t": datetime.now().isoformat()}}).execute()
                                 break
                     except Exception as e:
                         print(f"photo mark_done error: {e}", flush=True)
@@ -1502,7 +1507,7 @@ def vol_deliver_progress(run_id, vol_token):
     if not run:
         return jsonify({"error": "not found"}), 404
     try:
-        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_runs").execute().data
         runs = rows[0]["data"] if rows else []
         run  = next((r for r in runs if r["id"] == run_id), run)
     except:
@@ -1559,7 +1564,7 @@ def vol_delete_photo(run_id, vol_token):
         return redirect(url_for("vol_deliver", run_id=run_id, vol_token=vol_token))
     stop_key = request.form.get("stop_key","")
     try:
-        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        rows = db().table("campaign_data").select("data").eq("id", f"{cid}_runs").execute().data
         runs = rows[0]["data"] if rows else []
         for r in runs:
             if r["id"] == run_id:
@@ -1568,7 +1573,7 @@ def vol_delete_photo(run_id, vol_token):
                 db().table("campaign_data").upsert({"id": f"{cid}_runs", "data": runs}).execute()
                 break
         # Also remove from addrs
-        addr_rows = db().table("campaign_data").select("data")                        .eq("id", f"{cid}_addrs").execute().data
+        addr_rows = db().table("campaign_data").select("data").eq("id", f"{cid}_addrs").execute().data
         addrs = addr_rows[0]["data"] if addr_rows else []
         vol_route = next((r for r in run.get("routes",[]) if r["volunteer"]["name"]==vol_name), None)
         if vol_route:
