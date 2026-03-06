@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Search Routes{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+  <a href="/routes" class="btn btn-secondary btn-sm">← Back to Routes</a>
+  <h1 style="margin:0">🔍 Search Routes</h1>
+</div>
+
+<form method="GET" action="/routes/search" style="display:flex;gap:8px;margin-bottom:20px">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search by volunteer, address, contact, date..." style="flex:1" autofocus>
+  <button class="btn btn-primary" type="submit">Search</button>
+  {% if q %}<a href="/routes/search" class="btn btn-secondary">Clear</a>{% endif %}
+</form>
+
+{% if q %}
+  {% if results %}
+  <p style="color:#888;font-size:13px;margin-bottom:16px">{{ results|length }} result{% if results|length!=1 %}s{% endif %} for "<strong style="color:#ddd">{{ q }}</strong>"</p>
+  {% for r in results %}
+  <div class="card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="color:{{ r.hex }};font-size:18px">●</span>
+      <strong style="font-size:15px">{{ r.volunteer.name }}</strong>
+      <span class="badge badge-gray">{{ r.timestamp }}</span>
+      <span style="color:#888;font-size:12px">{{ r.stops|length }} matching stop{% if r.stops|length!=1%}s{% endif %}</span>
+    </div>
+    {% for si in r.stops %}
+    {% set s = si.stop %}
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #1e2235">
+      <span style="font-size:18px;margin-top:2px">{% if si.done %}✅{% else %}⏳{% endif %}</span>
+      <div style="flex:1">
+        <div style="font-size:14px;color:{% if si.done %}#888{% else %}#ddd{% endif %}{% if si.done %};text-decoration:line-through{% endif %}">
+          <strong>Stop {{ si.index + 1 }}:</strong> {{ s.address }}
+          {% if s.contact %}<span style="color:#888"> · 👤 {{ s.contact }}</span>{% endif %}
+          {% if s.phone %}<span style="color:#888"> · {{ s.phone }}</span>{% endif %}
+        </div>
+        {% if s.note %}<div style="color:#888;font-size:12px;margin-top:2px">📝 {{ s.note }}</div>{% endif %}
+        <a href="{{ gmaps_url(r.volunteer.address, s.address) }}" target="_blank" style="font-size:12px;color:#4a9eff">📍 Directions</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="alert alert-info">No results found for "{{ q }}". Try searching by volunteer name, address, contact name, or date like "Mar 5".</div>
+  {% endif %}
+{% else %}
+<div class="alert alert-info" style="margin-top:20px">Enter a search term above — try a volunteer name, street address, contact name, or date.</div>
+{% endif %}
+{% endblock %}
