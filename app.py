@@ -1006,7 +1006,7 @@ def delivery_run():
             total_stops = sum(len(r["stops"]) for r in routes)
             vol_names   = [r["volunteer"]["name"] for r in routes]
             auto_name   = f"{ts[:6]} · {len(routes)} vol{'s' if len(routes)!=1 else ''} · {total_stops} stops"
-            new_run = {
+            new_run = attach_vol_tokens({
                 "id":          run_id,
                 "name":        auto_name,
                 "timestamp":   ts,
@@ -1016,7 +1016,7 @@ def delivery_run():
                 "done_keys":   [],
                 "total_stops": total_stops,
                 "vol_names":   vol_names,
-            }
+            })
             runs = d.get("runs", [])
             runs.insert(0, new_run)
             save_session("runs", runs)
@@ -1263,6 +1263,251 @@ def export_csv():
     for a in d["addrs"]:
         writer.writerow({"status":"placed" if a.get("status")=="delivered" else "pending","address":a.get("address",""),"contact":a.get("contact",""),"phone":a.get("phone",""),"email":a.get("email",""),"note":a.get("note",""),"delivered_date":a.get("delivered_date","")})
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition":"attachment;filename=constituents.csv"})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VOLUNTEER DELIVERY PORTAL (public — token auth only)
+# ══════════════════════════════════════════════════════════════════════════════
+
+SUPABASE_BUCKET = "sign-photos"
+
+def get_run_by_token(run_id: str, vol_token: str):
+    """Load a run and verify the vol_token matches. Returns (cid, run) or (None, None)."""
+    try:
+        rows = db().table("campaign_data").select("id,data")                    .like("id", "%_runs").execute().data
+        for row in rows:
+            cid = row["id"].replace("_runs","")
+            for run in (row["data"] or []):
+                if run.get("id") == run_id:
+                    # find matching volunteer token
+                    for vt in run.get("vol_tokens", []):
+                        if vt.get("token") == vol_token:
+                            return cid, run, vt.get("vol_name")
+    except Exception as e:
+        print(f"get_run_by_token error: {e}", flush=True)
+    return None, None, None
+
+def upload_photo(cid: str, run_id: str, stop_key: str, file_bytes: bytes, mime: str) -> str:
+    """Upload a sign photo to Supabase Storage. Returns public URL or ''."""
+    try:
+        path = f"{cid}/{run_id}/{stop_key}_{uuid.uuid4().hex[:8]}.jpg"
+        db().storage.from_(SUPABASE_BUCKET).upload(
+            path, file_bytes,
+            {"content-type": mime, "cache-control": "3600", "upsert": "true"}
+        )
+        url = db().storage.from_(SUPABASE_BUCKET).get_public_url(path)
+        return url
+    except Exception as e:
+        print(f"upload_photo error: {e}", flush=True)
+        return ""
+
+def save_photo_record(cid: str, run_id: str, stop_key: str, vol_name: str,
+                      photo_url: str, lat=None, lng=None):
+    """Save photo metadata to campaign_data sign_photos list."""
+    try:
+        key    = f"{cid}_sign_photos"
+        rows   = db().table("campaign_data").select("data").eq("id", key).execute().data
+        photos = rows[0]["data"] if rows else []
+        photos.append({
+            "id":        str(uuid.uuid4()),
+            "run_id":    run_id,
+            "stop_key":  stop_key,
+            "vol_name":  vol_name,
+            "photo_url": photo_url,
+            "lat":       lat,
+            "lng":       lng,
+            "taken_at":  datetime.now().isoformat(),
+        })
+        db().table("campaign_data").upsert({"id": key, "data": photos}).execute()
+    except Exception as e:
+        print(f"save_photo_record error: {e}", flush=True)
+
+def get_photos(cid: str) -> list:
+    try:
+        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_sign_photos").execute().data
+        return rows[0]["data"] if rows else []
+    except:
+        return []
+
+@app.route("/deliver/<run_id>/<vol_token>", methods=["GET","POST"])
+def vol_deliver(run_id, vol_token):
+    """Public volunteer delivery portal — no login required."""
+    cid, run, vol_name = get_run_by_token(run_id, vol_token)
+    if not run:
+        return render_template("deliver_invalid.html"), 404
+
+    # Check expiry — 72 hours
+    try:
+        created = datetime.fromisoformat(run.get("timestamp_iso", run["timestamp"]))
+        if (datetime.now() - created).total_seconds() > 72 * 3600:
+            return render_template("deliver_expired.html", run=run), 410
+    except:
+        pass
+
+    # Find this volunteer's route
+    vol_route = next((r for r in run.get("routes",[])
+                      if r["volunteer"]["name"] == vol_name), None)
+    if not vol_route:
+        return render_template("deliver_invalid.html"), 404
+
+    done_set = set(run.get("done_keys", []))
+    photos   = get_photos(cid)
+    photo_map = {p["stop_key"]: p for p in photos if p.get("run_id") == run_id}
+
+    if request.method == "POST":
+        action   = request.form.get("action")
+        stop_key = request.form.get("stop_key")
+
+        if action == "mark_done" and stop_key:
+            # Load run from DB, update done_keys, save back
+            try:
+                rows = db().table("campaign_data").select("data")                            .eq("id", f"{cid}_runs").execute().data
+                runs = rows[0]["data"] if rows else []
+                for r in runs:
+                    if r["id"] == run_id:
+                        dk = set(r.get("done_keys", []))
+                        dk.add(stop_key)
+                        r["done_keys"] = list(dk)
+                        # Update status
+                        total = r.get("total_stops", 1)
+                        if len(dk) >= total:
+                            r["status"] = "complete"
+                        # Also mark constituent as delivered
+                        addr_rows = db().table("campaign_data").select("data")                                         .eq("id", f"{cid}_addrs").execute().data
+                        addrs = addr_rows[0]["data"] if addr_rows else []
+                        stop_idx = int(stop_key.split("_")[-1])
+                        stop_addr = vol_route["stops"][stop_idx]["address"] if stop_idx < len(vol_route["stops"]) else ""
+                        for a in addrs:
+                            if a.get("address") == stop_addr:
+                                a["status"] = "delivered"
+                                a["delivered_date"] = datetime.now().strftime("%b %d, %Y")
+                                a["delivered_by"] = vol_name
+                        db().table("campaign_data").upsert({"id": f"{cid}_runs",  "data": runs}).execute()
+                        db().table("campaign_data").upsert({"id": f"{cid}_addrs", "data": addrs}).execute()
+                        break
+            except Exception as e:
+                print(f"vol mark_done error: {e}", flush=True)
+
+        elif action == "upload_photo" and stop_key:
+            photo_file = request.files.get("photo")
+            lat = request.form.get("lat")
+            lng = request.form.get("lng")
+            if photo_file and photo_file.filename:
+                file_bytes = photo_file.read()
+                url = upload_photo(cid, run_id, stop_key, file_bytes, photo_file.mimetype)
+                if url:
+                    save_photo_record(cid, run_id, stop_key, vol_name, url,
+                                      float(lat) if lat else None,
+                                      float(lng) if lng else None)
+                    # Also auto-mark done
+                    request.form = request.form.copy()
+                    # Re-fetch and mark done inline
+                    try:
+                        rows = db().table("campaign_data").select("data")                                    .eq("id", f"{cid}_runs").execute().data
+                        runs = rows[0]["data"] if rows else []
+                        for r in runs:
+                            if r["id"] == run_id:
+                                dk = set(r.get("done_keys", []))
+                                dk.add(stop_key)
+                                r["done_keys"] = list(dk)
+                                if len(dk) >= r.get("total_stops", 1):
+                                    r["status"] = "complete"
+                                db().table("campaign_data").upsert({"id": f"{cid}_runs", "data": runs}).execute()
+                                break
+                    except Exception as e:
+                        print(f"photo mark_done error: {e}", flush=True)
+
+        return redirect(url_for("vol_deliver", run_id=run_id, vol_token=vol_token))
+
+    # Reload updated state
+    try:
+        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        runs = rows[0]["data"] if rows else []
+        run  = next((r for r in runs if r["id"] == run_id), run)
+    except:
+        pass
+
+    done_set  = set(run.get("done_keys", []))
+    photos    = get_photos(cid)
+    photo_map = {p["stop_key"]: p for p in photos if p.get("run_id") == run_id}
+    total     = len(vol_route["stops"])
+    done_ct   = sum(1 for i in range(total)
+                    if f"{vol_name}_{i}" in done_set)
+
+    return render_template("deliver.html",
+                           run=run, vol_route=vol_route, vol_name=vol_name,
+                           done_set=done_set, photo_map=photo_map,
+                           total=total, done_ct=done_ct,
+                           run_id=run_id, vol_token=vol_token)
+
+
+@app.route("/deliver/<run_id>/<vol_token>/progress")
+def vol_deliver_progress(run_id, vol_token):
+    """JSON endpoint for live progress polling."""
+    cid, run, vol_name = get_run_by_token(run_id, vol_token)
+    if not run:
+        return jsonify({"error": "not found"}), 404
+    try:
+        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        runs = rows[0]["data"] if rows else []
+        run  = next((r for r in runs if r["id"] == run_id), run)
+    except:
+        pass
+    done_set = set(run.get("done_keys", []))
+    vol_route = next((r for r in run.get("routes",[])
+                      if r["volunteer"]["name"] == vol_name), None)
+    total   = len(vol_route["stops"]) if vol_route else 0
+    done_ct = sum(1 for i in range(total) if f"{vol_name}_{i}" in done_set)
+    return jsonify({"done": done_ct, "total": total, "pct": round(done_ct/total*100) if total else 0})
+
+
+# ── Generate vol tokens when a run is created ──────────────────────────────────
+def attach_vol_tokens(run: dict) -> dict:
+    """Add a unique share token for each volunteer in a run."""
+    tokens = []
+    for r in run.get("routes", []):
+        tokens.append({
+            "vol_name": r["volunteer"]["name"],
+            "token":    str(uuid.uuid4()),
+        })
+    run["vol_tokens"]     = tokens
+    run["timestamp_iso"]  = datetime.now().isoformat()
+    return run
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MISSING / STOLEN SIGNS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/constituents/flag_missing", methods=["POST"])
+@login_required
+def flag_missing():
+    d    = get_data()
+    addr = request.form.get("address","")
+    note = request.form.get("missing_note","").strip()
+    for a in d["addrs"]:
+        if a["address"] == addr:
+            a["missing"] = True
+            a["missing_date"] = datetime.now().strftime("%b %d, %Y")
+            a["missing_note"] = note
+            break
+    save_session("addrs", d["addrs"])
+    return redirect(request.referrer or url_for("constituents"))
+
+@app.route("/constituents/unflag_missing", methods=["POST"])
+@login_required
+def unflag_missing():
+    d    = get_data()
+    addr = request.form.get("address","")
+    for a in d["addrs"]:
+        if a["address"] == addr:
+            a.pop("missing", None)
+            a.pop("missing_date", None)
+            a.pop("missing_note", None)
+            break
+    save_session("addrs", d["addrs"])
+    return redirect(request.referrer or url_for("constituents"))
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
