@@ -259,11 +259,26 @@
           {% if active_run %}Viewing: {{ active_run.name }}{% else %}Select a run from the drawer{% endif %}
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn btn-secondary btn-sm" onclick="toggleDrawer()" id="drawer-toggle-btn">
+      <!-- Stats pills -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>
+          <span style="font-size:12px;color:var(--text2)">Placed</span>
+          <strong style="font-size:12px;color:var(--text)">{{ d.addrs|selectattr('status','equalto','delivered')|list|length }}</strong>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--orange);display:inline-block"></span>
+          <span style="font-size:12px;color:var(--text2)">Pending</span>
+          <strong style="font-size:12px;color:var(--text)">{{ d.addrs|selectattr('status','ne','delivered')|list|length }}</strong>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent);display:inline-block"></span>
+          <span style="font-size:12px;color:var(--text2)">Active Runs</span>
+          <strong style="font-size:12px;color:var(--text)">{{ runs|selectattr('status','equalto','active')|list|length }}</strong>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="toggleDrawer()">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
           Runs
-          <span style="background:var(--accent);color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;font-weight:600">{{ runs|selectattr('status','equalto','active')|list|length }}</span>
         </button>
       </div>
     </div>
@@ -275,7 +290,6 @@
       <div class="drawer" id="runs-drawer">
         <div class="drawer-header">
           <h3>Delivery Runs</h3>
-          <input class="drawer-search" placeholder="Search runs, volunteers, dates..." oninput="filterRuns(this.value)">
           <div class="drawer-close" onclick="toggleDrawer()">✕</div>
         </div>
         <div class="filter-tabs">
@@ -452,7 +466,7 @@ function renderMap(view){
     });
     const placed=allAddrs.filter(a=>a.status==='delivered').length;
     const pending=allAddrs.length-placed;
-    legend=`<div class="legend-row"><span class="legend-dot" style="background:#34c759"></span><span>Placed · ${placed}</span></div><div class="legend-row"><span class="legend-dot" style="background:#8b92a5"></span><span>Pending · ${pending}</span></div>`;
+    legend=''; // Stats shown in bottom bar
   }
 
   setLegend(legend);
