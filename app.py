@@ -283,10 +283,24 @@ def volunteers():
             zipcode= request.form.get("zip","").strip()
             if name and street and city and state and zipcode:
                 addr = f"{street}, {city}, {state} {zipcode}"
+                skills_raw = request.form.get("skills","").strip()
+                avail_raw  = request.form.get("availability","").strip()
                 d["vols"].append({"name":name,
-                    "email":request.form.get("email","").strip(),
-                    "phone":request.form.get("phone","").strip(),
-                    "address":addr})
+                    "first_name":    request.form.get("vfirst","").strip(),
+                    "last_name":     request.form.get("vlast","").strip(),
+                    "email":         request.form.get("email","").strip(),
+                    "phone":         request.form.get("phone","").strip(),
+                    "address":       addr,
+                    "has_vehicle":   request.form.get("has_vehicle") == "1",
+                    "skills":        [s.strip() for s in skills_raw.split(",") if s.strip()],
+                    "availability":  avail_raw,
+                    "shirt_size":    request.form.get("shirt_size","").strip(),
+                    "emergency_contact": request.form.get("emergency_contact","").strip(),
+                    "emergency_phone":   request.form.get("emergency_phone","").strip(),
+                    "note":          request.form.get("vnote","").strip(),
+                    "runs_completed": 0,
+                    "joined_date":   datetime.now().strftime("%b %d, %Y"),
+                })
                 save_session("vols", d["vols"])
                 msg = f"✅ {name} added!"
             else:
@@ -296,6 +310,20 @@ def volunteers():
             d["vols"] = [v for v in d["vols"] if v["name"] != name]
             save_session("vols", d["vols"])
             msg = "Volunteer removed."
+        elif action == "update_vol":
+            vid = request.form.get("vol_id_key")
+            for v in d["vols"]:
+                if v.get("id","") == vid or v["name"] == vid:
+                    for field in ["name","email","phone","first_name","last_name",
+                                  "shirt_size","availability","emergency_contact",
+                                  "emergency_phone","note"]:
+                        val = request.form.get(field,"").strip()
+                        if val: v[field] = val
+                    skills_raw = request.form.get("skills","").strip()
+                    v["skills"] = [s.strip() for s in skills_raw.split(",") if s.strip()]
+                    v["has_vehicle"] = request.form.get("has_vehicle") == "1"
+                    break
+            save_session("vols", d["vols"])
         elif action == "clear":
             save_session("vols", [])
             d["vols"] = []
@@ -348,13 +376,42 @@ def constituents():
             zipcode = request.form.get("zip","").strip()
             if street and city and state and zipcode:
                 addr = f"{street}, {city}, {state} {zipcode}"
+                tags_raw = request.form.get("tags","").strip()
                 entry = {"id":str(uuid.uuid4()),"address":addr,
-                    "contact":request.form.get("contact","").strip(),
-                    "phone":request.form.get("phone","").strip(),
-                    "email":request.form.get("email","").strip(),
-                    "note":request.form.get("note","").strip(),
-                    "sign_requested": request.form.get("sign_requested") == "1",
-                    "status":"pending"}
+                    # Basic contact
+                    "contact":       request.form.get("contact","").strip(),
+                    "first_name":    request.form.get("first_name","").strip(),
+                    "last_name":     request.form.get("last_name","").strip(),
+                    "phone":         request.form.get("phone","").strip(),
+                    "email":         request.form.get("email","").strip(),
+                    "note":          request.form.get("note","").strip(),
+                    # Voter profile
+                    "voter_id":      request.form.get("voter_id","").strip(),
+                    "party":         request.form.get("party","").strip(),
+                    "precinct":      request.form.get("precinct","").strip(),
+                    "ward":          request.form.get("ward","").strip(),
+                    "district":      request.form.get("district","").strip(),
+                    "support_score": request.form.get("support_score","").strip(),
+                    "relationship":  request.form.get("relationship","supporter"),
+                    "language":      request.form.get("language","").strip(),
+                    "best_contact_time": request.form.get("best_contact_time","").strip(),
+                    # Vote history
+                    "voted_2024g":   request.form.get("voted_2024g") == "1",
+                    "voted_2024p":   request.form.get("voted_2024p") == "1",
+                    "voted_2022g":   request.form.get("voted_2022g") == "1",
+                    "voted_2022p":   request.form.get("voted_2022p") == "1",
+                    "voted_2020g":   request.form.get("voted_2020g") == "1",
+                    # Engagement
+                    "sign_requested":    request.form.get("sign_requested") == "1",
+                    "volunteer_interest":request.form.get("volunteer_interest") == "1",
+                    "donor":             request.form.get("donor") == "1",
+                    "donation_amount":   request.form.get("donation_amount","").strip(),
+                    "tags":              [t.strip() for t in tags_raw.split(",") if t.strip()],
+                    # Canvass tracking
+                    "canvass_result":    request.form.get("canvass_result","").strip(),
+                    "canvass_date":      request.form.get("canvass_date","").strip(),
+                    "canvassed_by":      request.form.get("canvassed_by","").strip(),
+                    "status":            "pending"}
                 lat,lng = geocode(addr)
                 if lat: entry["lat"]=lat; entry["lng"]=lng
                 d["addrs"].append(entry)
@@ -392,6 +449,23 @@ def constituents():
             addr = request.form.get("address")
             for a in d["addrs"]:
                 if a["address"]==addr: a["status"]="pending"
+            save_session("addrs", d["addrs"])
+        elif action == "update_voter":
+            vid = request.form.get("voter_id_key")
+            for a in d["addrs"]:
+                if a["id"] == vid:
+                    for field in ["contact","first_name","last_name","phone","email","note",
+                                  "voter_id","party","precinct","ward","district","support_score",
+                                  "relationship","language","best_contact_time",
+                                  "canvass_result","canvass_date","canvassed_by","donation_amount"]:
+                        val = request.form.get(field,"").strip()
+                        if val or field in ["support_score","relationship"]: a[field] = val
+                    tags_raw = request.form.get("tags","").strip()
+                    a["tags"] = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                    for flag in ["sign_requested","volunteer_interest","donor",
+                                 "voted_2024g","voted_2024p","voted_2022g","voted_2022p","voted_2020g"]:
+                        a[flag] = request.form.get(flag) == "1"
+                    break
             save_session("addrs", d["addrs"])
         elif action == "import_csv":
             import csv, io
