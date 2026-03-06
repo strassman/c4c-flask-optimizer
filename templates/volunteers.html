@@ -1,5 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Volunteers{% endblock %}
+{% block extra_head %}
+<style>
+.tbl-wrap{max-height:480px;overflow-y:auto;border:1px solid #2d3148;border-radius:8px}
+.tbl-wrap thead th{position:sticky;top:0;background:#1a1d27;z-index:1}
+.search-bar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.search-bar input{flex:1;margin:0}
+.tbl-count{color:#888;font-size:12px;margin-bottom:8px}
+</style>
+{% endblock %}
 {% block content %}
 <h1>👥 Volunteer Roster</h1>
 <p class="subtitle">{{ d.vols|length }} volunteer{% if d.vols|length != 1 %}s{% endif %} on file</p>
@@ -32,7 +41,7 @@
 <details>
   <summary>📂 Import from CSV</summary>
   <div class="detail-body">
-    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have columns: first_name, last_name, email, phone, street_address, city, state, zip</p>
+    <p style="color:#888;font-size:13px;margin-bottom:12px">CSV should have: first_name, last_name, email, phone, street_address, city, state, zip</p>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="action" value="import_csv">
       <input type="file" name="csv_file" accept=".csv" required>
@@ -44,33 +53,74 @@
 <hr class="divider">
 
 {% if d.vols %}
-<h2>Roster</h2>
-<table class="tbl">
-  <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th></th></tr></thead>
-  <tbody>
-  {% for v in d.vols %}
-  <tr>
-    <td><strong>{{ v.name }}</strong></td>
-    <td>{{ v.email or '—' }}</td>
-    <td>{{ v.phone or '—' }}</td>
-    <td>{{ v.address or '—' }}</td>
-    <td>
-      <form method="POST" style="display:inline" onsubmit="return confirm('Remove {{ v.name }}?')">
-        <input type="hidden" name="action" value="delete">
-        <input type="hidden" name="name" value="{{ v.name }}">
-        <button class="btn btn-danger btn-sm" type="submit">Remove</button>
-      </form>
-    </td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
-<br>
-<form method="POST" onsubmit="return confirm('Clear ALL volunteers?')">
-  <input type="hidden" name="action" value="clear">
-  <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All Volunteers</button>
-</form>
+{% set all_emails = [] %}
+{% set all_phones = [] %}
+{% for v in d.vols %}
+  {% if v.email %}{% set _ = all_emails.append(v.email) %}{% endif %}
+  {% if v.phone %}{% set _ = all_phones.append(v.phone) %}{% endif %}
+{% endfor %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+  <h2 style="margin:0">Roster — {{ d.vols|length }}</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {% if all_emails %}
+    <a href="mailto:{{ all_emails|join(',') }}?subject=Volunteer Update" class="btn btn-primary btn-sm">📧 Email All</a>
+    {% endif %}
+    {% if all_phones %}
+    <a href="sms:{{ all_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>
+    {% endif %}
+    <form method="POST" onsubmit="return confirm('Clear ALL volunteers?')" style="display:inline">
+      <input type="hidden" name="action" value="clear">
+      <button class="btn btn-danger btn-sm" type="submit">🗑️ Clear All</button>
+    </form>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input type="text" id="vol-search" placeholder="🔍 Search name, email, phone, address..." oninput="filterTable('vol-search','vol-tbody','vol-count')">
+</div>
+<p class="tbl-count" id="vol-count"></p>
+
+<div class="tbl-wrap">
+  <table class="tbl">
+    <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Address</th><th></th></tr></thead>
+    <tbody id="vol-tbody">
+    {% for v in d.vols %}
+    <tr>
+      <td><strong>{{ v.name }}</strong></td>
+      <td>{% if v.email %}<a href="mailto:{{ v.email }}" style="color:#4a9eff">{{ v.email }}</a>{% else %}—{% endif %}</td>
+      <td>{% if v.phone %}<a href="sms:{{ v.phone }}" style="color:#4a9eff">{{ v.phone }}</a>{% else %}—{% endif %}</td>
+      <td>{{ v.address or '—' }}</td>
+      <td>
+        <form method="POST" style="display:inline" onsubmit="return confirm('Remove {{ v.name }}?')">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="name" value="{{ v.name }}">
+          <button class="btn btn-danger btn-sm" type="submit">✕</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
 {% else %}
 <div class="alert alert-info">No volunteers yet. Add one above or import from CSV.</div>
 {% endif %}
+
+<script>
+function filterTable(searchId, tbodyId, countId) {
+  const q = document.getElementById(searchId).value.toLowerCase();
+  const rows = document.getElementById(tbodyId).querySelectorAll('tr');
+  let visible = 0;
+  rows.forEach(row => {
+    const match = row.textContent.toLowerCase().includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const el = document.getElementById(countId);
+  if (el) el.textContent = q ? `Showing ${visible} of ${rows.length}` : `${rows.length} total`;
+}
+filterTable('vol-search','vol-tbody','vol-count');
+</script>
 {% endblock %}
