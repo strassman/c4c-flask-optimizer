@@ -1426,9 +1426,7 @@ def vol_deliver(run_id, vol_token):
                     save_photo_record(cid, run_id, stop_key, vol_name, url,
                                       float(lat) if lat else None,
                                       float(lng) if lng else None)
-                    # Also auto-mark done
-                    request.form = request.form.copy()
-                    # Re-fetch and mark done inline
+                    # Also auto-mark the stop done and mark constituent delivered
                     try:
                         rows = db().table("campaign_data").select("data")                                    .eq("id", f"{cid}_runs").execute().data
                         runs = rows[0]["data"] if rows else []
@@ -1439,7 +1437,20 @@ def vol_deliver(run_id, vol_token):
                                 r["done_keys"] = list(dk)
                                 if len(dk) >= r.get("total_stops", 1):
                                     r["status"] = "complete"
-                                db().table("campaign_data").upsert({"id": f"{cid}_runs", "data": runs}).execute()
+                                # Mark constituent delivered — use rsplit to handle spaces in vol name
+                                addr_rows = db().table("campaign_data").select("data")                                                .eq("id", f"{cid}_addrs").execute().data
+                                addrs = addr_rows[0]["data"] if addr_rows else []
+                                parts = stop_key.rsplit("_", 1)
+                                stop_idx = int(parts[-1]) if len(parts) == 2 and parts[-1].isdigit() else -1
+                                if stop_idx >= 0 and stop_idx < len(vol_route["stops"]):
+                                    stop_addr = vol_route["stops"][stop_idx]["address"]
+                                    for a in addrs:
+                                        if a.get("address") == stop_addr:
+                                            a["status"] = "delivered"
+                                            a["delivered_date"] = datetime.now().strftime("%b %d, %Y")
+                                            a["delivered_by"] = vol_name
+                                db().table("campaign_data").upsert({"id": f"{cid}_runs",  "data": runs}).execute()
+                                db().table("campaign_data").upsert({"id": f"{cid}_addrs", "data": addrs}).execute()
                                 break
                     except Exception as e:
                         print(f"photo mark_done error: {e}", flush=True)
