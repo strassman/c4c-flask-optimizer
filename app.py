@@ -1008,6 +1008,7 @@ def delivery_run():
             auto_name   = f"{ts[:6]} · {len(routes)} vol{'s' if len(routes)!=1 else ''} · {total_stops} stops"
             new_run = attach_vol_tokens({
                 "id":          run_id,
+                "cid":         d["cid"],
                 "name":        auto_name,
                 "timestamp":   ts,
                 "type":        run_type,
@@ -1020,6 +1021,7 @@ def delivery_run():
             runs = d.get("runs", [])
             runs.insert(0, new_run)
             save_session("runs", runs)
+            save_token_index(new_run)
             # Also keep history for backwards compat
             rec = {"timestamp": ts + (" (proximity)" if run_type=="proximity" else ""), "routes": routes}
             d["history"] = [rec] + (d["history"] or [])
