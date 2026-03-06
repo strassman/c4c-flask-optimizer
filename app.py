@@ -1021,6 +1021,22 @@ def delivery_run():
             runs = d.get("runs", [])
             runs.insert(0, new_run)
             save_session("runs", runs)
+            # ── Token index ────────────────────────────────────────────
+def save_token_index(run: dict):
+    try:
+        idx = {}
+        for vt in run.get("vol_tokens", []):
+            idx[vt["token"]] = {
+                "cid":      run["cid"],
+                "run_id":   run["id"],
+                "vol_name": vt["vol_name"],
+            }
+        db().table("campaign_data").upsert({
+            "id":   f"token_index_{run['id']}",
+            "data": idx,
+        }).execute()
+    except Exception as e:
+        print(f"save_token_index error: {e}", flush=True)
             save_token_index(new_run)
             # Also keep history for backwards compat
             rec = {"timestamp": ts + (" (proximity)" if run_type=="proximity" else ""), "routes": routes}
