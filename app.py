@@ -1535,6 +1535,41 @@ def attach_vol_tokens(run: dict) -> dict:
 # MISSING / STOLEN SIGNS
 # ══════════════════════════════════════════════════════════════════════════════
 
+@app.route("/deliver/<run_id>/<vol_token>/delete_photo", methods=["POST"])
+def vol_delete_photo(run_id, vol_token):
+    """Allow volunteer to delete their photo for a stop."""
+    cid, run, vol_name = get_run_by_token(run_id, vol_token)
+    if not run:
+        return redirect(url_for("vol_deliver", run_id=run_id, vol_token=vol_token))
+    stop_key = request.form.get("stop_key","")
+    try:
+        rows = db().table("campaign_data").select("data")                    .eq("id", f"{cid}_runs").execute().data
+        runs = rows[0]["data"] if rows else []
+        for r in runs:
+            if r["id"] == run_id:
+                if r.get("stop_photos") and stop_key in r["stop_photos"]:
+                    del r["stop_photos"][stop_key]
+                db().table("campaign_data").upsert({"id": f"{cid}_runs", "data": runs}).execute()
+                break
+        # Also remove from addrs
+        addr_rows = db().table("campaign_data").select("data")                        .eq("id", f"{cid}_addrs").execute().data
+        addrs = addr_rows[0]["data"] if addr_rows else []
+        vol_route = next((r for r in run.get("routes",[]) if r["volunteer"]["name"]==vol_name), None)
+        if vol_route:
+            parts = stop_key.rsplit("_", 1)
+            stop_idx = int(parts[-1]) if len(parts)==2 and parts[-1].isdigit() else -1
+            if stop_idx >= 0 and stop_idx < len(vol_route["stops"]):
+                stop_addr = vol_route["stops"][stop_idx]["address"]
+                for a in addrs:
+                    if a.get("address") == stop_addr:
+                        a.pop("photo_url", None)
+                        a.pop("photo_taken_at", None)
+                db().table("campaign_data").upsert({"id": f"{cid}_addrs", "data": addrs}).execute()
+    except Exception as e:
+        print(f"delete_photo error: {e}", flush=True)
+    return redirect(url_for("vol_deliver", run_id=run_id, vol_token=vol_token))
+
+
 @app.route("/constituents/flag_missing", methods=["POST"])
 @login_required
 def flag_missing():
