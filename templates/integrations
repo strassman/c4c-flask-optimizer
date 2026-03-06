@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}Integrations{% endblock %}
+{% block extra_head %}
+<style>
+.integration-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 24px;
+  margin-bottom: 14px;
+  transition: border-color .2s;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 18px;
+  align-items: center;
+}
+.integration-card:hover { border-color: var(--border2); }
+.integration-card.connected { border-color: rgba(52,199,89,.3); background: rgba(52,199,89,.03); }
+.integration-card.coming-soon { opacity: .55; }
+
+.int-logo {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.int-name { font-size: 15px; font-weight: 600; letter-spacing: -.02em; margin-bottom: 3px; }
+.int-desc { font-size: 12px; color: var(--text3); margin-bottom: 6px; }
+.int-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.int-chip {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text3);
+}
+.int-chip.green { background: rgba(52,199,89,.1); border-color: rgba(52,199,89,.3); color: var(--green); }
+.int-chip.soon  { background: rgba(255,255,255,.04); color: var(--text3); }
+
+.connect-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500; font-family: inherit;
+  cursor: pointer; border: none; transition: opacity .15s, transform .1s; white-space: nowrap;
+  text-decoration: none;
+}
+.connect-btn:hover { opacity: .88; text-decoration: none; }
+.connect-btn:active { transform: scale(.98); }
+.connect-btn.primary { background: var(--accent); color: #fff; }
+.connect-btn.danger  { background: transparent; border: 1px solid rgba(255,59,48,.4); color: #ff7b73; }
+.connect-btn.danger:hover { background: rgba(255,59,48,.1); }
+.connect-btn.disabled { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); cursor: default; }
+.connect-btn.disabled:hover { opacity: 1; }
+
+.int-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+
+/* API key form */
+.api-key-form {
+  display: none; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+  grid-column: 1 / -1;
+}
+.api-key-form.show { display: block; }
+
+/* Security callout */
+.security-box {
+  background: rgba(79,142,247,.06);
+  border: 1px solid rgba(79,142,247,.2);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  font-size: 13px; color: var(--text2);
+  display: flex; gap: 12px; align-items: flex-start;
+}
+.security-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+  <h1 style="margin:0">Integrations</h1>
+  <span class="badge badge-gray">Architecture Ready</span>
+</div>
+<p class="subtitle">Connect voter file and CRM platforms. All data imports are <strong>read-only</strong> — RouteOps never writes back to external systems.</p>
+
+{% if msg %}
+<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}">{{ msg }}</div>
+{% endif %}
+
+<!-- Security note -->
+<div class="security-box">
+  <div class="security-icon">🔐</div>
+  <div>
+    <strong style="color:var(--text)">Token security</strong><br>
+    OAuth access tokens are encrypted at rest using AES-256 (Fernet) before storage.
+    The encryption key lives only in your Railway environment variables — never in code or the database.
+    Tokens are decrypted in memory only when an API call is made, then discarded.
+  </div>
+</div>
+
+<!-- Integration cards -->
+{% for pid, cfg in integrations.items() %}
+{% set rec = connected.get(pid) %}
+{% set is_connected = rec and rec.status == 'connected' %}
+{% set is_soon = cfg.status == 'coming_soon' %}
+
+<div class="integration-card {% if is_connected %}connected{% elif is_soon %}coming-soon{% endif %}">
+
+  <!-- Logo -->
+  <div class="int-logo" style="background:{{ cfg.color }}22; border: 1px solid {{ cfg.color }}44;">
+    {{ cfg.logo }}
+  </div>
+
+  <!-- Info -->
+  <div>
+    <div class="int-name">{{ cfg.name }}</div>
+    <div class="int-desc">{{ cfg.description }}</div>
+    <div class="int-meta">
+      {% if is_connected %}
+        <span class="int-chip green">● Connected</span>
+        {% if rec.last_sync %}
+        <span class="int-chip">Last sync: {{ rec.last_sync[:10] }}</span>
+        {% endif %}
+        {% if rec.connected_at %}
+        <span class="int-chip">Since {{ rec.connected_at[:10] }}</span>
+        {% endif %}
+        {% if rec.auth_type %}
+        <span class="int-chip">{{ rec.auth_type }}</span>
+        {% endif %}
+      {% elif is_soon %}
+        <span class="int-chip soon">Coming soon — API access pending</span>
+      {% else %}
+        <span class="int-chip">Not connected</span>
+      {% endif %}
+      <a href="{{ cfg.docs }}" target="_blank" style="font-size:11px;color:var(--accent)">API docs ↗</a>
+    </div>
+
+    <!-- API key input form (hidden until toggled) -->
+    {% if not is_soon %}
+    <div class="api-key-form" id="keyform-{{ pid }}">
+      <form method="POST">
+        <input type="hidden" name="action" value="manual_api_key">
+        <input type="hidden" name="provider" value="{{ pid }}">
+        {% if pid == 'nationbuilder' %}
+        <div style="margin-bottom:8px">
+          <label style="font-size:12px;color:var(--text3);margin-bottom:4px;display:block">NationBuilder Slug <span style="font-weight:400">(e.g. "mysite" from mysite.nationbuilder.com)</span></label>
+          <input type="text" name="nb_slug" placeholder="mysite" style="max-width:240px;margin:0 0 8px">
+        </div>
+        {% endif %}
+        <label style="font-size:12px;color:var(--text3);margin-bottom:4px;display:block">
+          {% if pid == 'actblue' %}ActBlue API Credentials (client:secret){% elif pid == 'catalist' %}Catalist API Key{% else %}API Key / Token{% endif %}
+        </label>
+        <div style="display:flex;gap:8px;max-width:480px">
+          <input type="password" name="api_key" placeholder="Paste your API key here" style="flex:1;margin:0" required>
+          <button class="connect-btn primary" type="submit">Save & Connect</button>
+          <button type="button" class="connect-btn disabled" onclick="toggleKeyForm('{{ pid }}')">Cancel</button>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:6px">🔒 Encrypted with AES-256 before storage. Never visible after saving.</p>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Actions -->
+  <div class="int-actions">
+    {% if is_connected %}
+      <!-- Sync -->
+      <form method="POST">
+        <input type="hidden" name="action" value="sync">
+        <input type="hidden" name="provider" value="{{ pid }}">
+        <button class="connect-btn primary" type="submit">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 4a8 8 0 0112 0M16 16a8 8 0 01-12 0"/><polyline points="1 4 4 4 4 7"/><polyline points="19 16 16 16 16 13"/></svg>
+          Sync Now
+        </button>
+      </form>
+      <!-- Disconnect -->
+      <form method="POST" onsubmit="return confirm('Disconnect {{ cfg.name }}? This does not delete any synced data.')">
+        <input type="hidden" name="action" value="disconnect">
+        <input type="hidden" name="provider" value="{{ pid }}">
+        <button class="connect-btn danger" type="submit">Disconnect</button>
+      </form>
+
+    {% elif is_soon %}
+      <span class="connect-btn disabled">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l2 2"/></svg>
+        Coming Soon
+      </span>
+
+    {% else %}
+      <!-- OAuth connect (for providers with auth_url) -->
+      {% if cfg.auth_url and pid != 'nationbuilder' %}
+        {% if cfg.client_id %}
+        <a href="/integrations/connect/{{ pid }}" class="connect-btn primary">
+          <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 3a7 7 0 110 14A7 7 0 0110 3z"/><path d="M14 10H6M10 6v8"/></svg>
+          Connect via OAuth
+        </a>
+        {% else %}
+        <button class="connect-btn primary" onclick="toggleKeyForm('{{ pid }}')">
+          Enter API Credentials
+        </button>
+        {% endif %}
+      {% elif pid == 'nationbuilder' %}
+        <button class="connect-btn primary" onclick="toggleKeyForm('{{ pid }}')">
+          Connect NationBuilder
+        </button>
+      {% else %}
+        <button class="connect-btn primary" onclick="toggleKeyForm('{{ pid }}')">
+          Enter API Key
+        </button>
+      {% endif %}
+    {% endif %}
+  </div>
+
+</div>
+{% endfor %}
+
+<!-- Architecture note -->
+<div class="card" style="margin-top:24px">
+  <div class="card-title">🏗️ Architecture Notes</div>
+  <div style="font-size:13px;color:var(--text2);line-height:1.7">
+    <p style="margin-bottom:10px">This page is <strong style="color:var(--text)">fully wired</strong> — the OAuth flows, token encryption, data mappers, and sync logic are all implemented and ready. The only thing needed to activate each integration is:</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:12px">
+      {% for pid, cfg in integrations.items() %}
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px">
+        <div style="font-weight:600;margin-bottom:4px">{{ cfg.logo }} {{ cfg.name }}</div>
+        <div style="font-size:11px;color:var(--text3)">
+          {% if cfg.client_id %}✅ Client ID set{% else %}⬜ Set <code>{{ pid.upper().replace('-','_') }}_CLIENT_ID</code>{% endif %}<br>
+          {% if cfg.auth_url %}OAuth 2.0{% else %}API key auth{% endif %} · Read-only
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p style="color:var(--text3);font-size:12px">Imported records are tagged with <code style="background:var(--surface2);padding:1px 5px;border-radius:4px">source: "ngpvan"</code> etc. and treated as read-only in the UI. Manual edits to imported records are saved locally only and never pushed back to the source system.</p>
+  </div>
+</div>
+
+<script>
+function toggleKeyForm(pid) {
+  const f = document.getElementById('keyform-' + pid);
+  if (f) f.classList.toggle('show');
+}
+</script>
+{% endblock %}
