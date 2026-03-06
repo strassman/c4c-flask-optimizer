@@ -36,7 +36,7 @@ def hp(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
 def load_all(cid):
-    keys = ["vols","addrs","run_ids","done","history"]
+    keys = ["vols","addrs","run_ids","done","history","runs"]
     ids  = [f"{cid}_{k}" for k in keys]
     try:
         rows = db().table("campaign_data").select("id,data").in_("id", ids).execute().data
@@ -70,6 +70,7 @@ def get_data():
         session["run_ids"] = d["run_ids"] or []
         session["done"]    = d["done"]    or []
         session["history"] = d["history"] or []
+        session["runs"]    = d["runs"]    or []
         session["loaded_for"] = cid
     return {
         "vols":    session.get("vols", []),
@@ -77,6 +78,7 @@ def get_data():
         "run_ids": session.get("run_ids", []),
         "done":    {c["key"]:c for c in session.get("done", [])},
         "history": session.get("history", []),
+        "runs":    session.get("runs", []),
         "cname":   session.get("cname", "Campaign"),
         "cid":     cid,
     }
@@ -495,6 +497,8 @@ def delivery_run():
             if addr_updated: save_session("addrs", d["addrs"])
             if not dr: return render_template("delivery_run.html", d=d, msg="❌ No addresses could be geocoded.")
 
+            ts  = datetime.now().strftime("%b %d, %Y at %I:%M %p")
+            run_id = str(uuid.uuid4())
             if action == "optimize":
                 pts = [(v["lat"],v["lng"]) for v in vr]+[(x["lat"],x["lng"]) for x in dr]
                 nv  = len(vr)
@@ -512,34 +516,43 @@ def delivery_run():
                     routes.append({"volunteer":vol,"stops":stops,
                         "distance_miles":dist,"road_geometry":osrm_route(wps),
                         "color":COLORS[vi%len(COLORS)],"hex":HEX_COLORS[vi%len(HEX_COLORS)]})
-                session["routes"] = routes
-                session["prox"]   = None
-                rec={"timestamp":datetime.now().strftime("%b %d, %Y at %I:%M %p"),"routes":routes}
-                d["history"]=[rec]+(d["history"] or [])
-                save_session("history", d["history"])
-                return redirect(url_for("map_page"))
+                run_type = "optimized"
             else:  # proximity
                 clusters={i:[] for i in range(len(vr))}
                 for x in dr:
                     best=min(range(len(vr)),key=lambda vi:hav((vr[vi]["lat"],vr[vi]["lng"]),(x["lat"],x["lng"])))
                     clusters[best].append(x)
-                prox_routes=[]
+                routes=[]
                 for vi,vol in enumerate(vr):
                     if not clusters[vi]: continue
-                    prox_routes.append({"volunteer":vol,"stops":clusters[vi],
+                    routes.append({"volunteer":vol,"stops":clusters[vi],
                         "distance_miles":"—","road_geometry":None,
                         "color":COLORS[vi%len(COLORS)],"hex":HEX_COLORS[vi%len(HEX_COLORS)]})
-                # Convert clusters to list-of-lists for JSON compatibility
-                clusters_list = [clusters[i] for i in range(len(vr))]
-                session["prox"]   = {"volunteers":vr,"clusters":clusters_list,
-                    "timestamp":datetime.now().strftime("%b %d, %Y at %I:%M %p")}
-                session["routes"] = prox_routes
-                # Save to history so Routes page shows it
-                rec = {"timestamp": datetime.now().strftime("%b %d, %Y at %I:%M %p") + " (proximity)",
-                       "routes": prox_routes}
-                d["history"] = [rec] + (d["history"] or [])
-                save_session("history", d["history"])
-                return redirect(url_for("map_page"))
+                run_type = "proximity"
+
+            total_stops = sum(len(r["stops"]) for r in routes)
+            vol_names   = [r["volunteer"]["name"] for r in routes]
+            auto_name   = f"{ts[:6]} · {len(routes)} vol{'s' if len(routes)!=1 else ''} · {total_stops} stops"
+            new_run = {
+                "id":          run_id,
+                "name":        auto_name,
+                "timestamp":   ts,
+                "type":        run_type,
+                "status":      "active",
+                "routes":      routes,
+                "done_keys":   [],
+                "total_stops": total_stops,
+                "vol_names":   vol_names,
+            }
+            runs = d.get("runs", [])
+            runs.insert(0, new_run)
+            save_session("runs", runs)
+            # Also keep history for backwards compat
+            rec = {"timestamp": ts + (" (proximity)" if run_type=="proximity" else ""), "routes": routes}
+            d["history"] = [rec] + (d["history"] or [])
+            save_session("history", d["history"])
+            session["active_run_id"] = run_id
+            return redirect(url_for("map_page"))
         return redirect(url_for("delivery_run"))
 
     avail = session.get("avail", [])
@@ -559,91 +572,137 @@ def delivery_run():
 @app.route("/map")
 @login_required
 def map_page():
-    d         = get_data()
-    routes    = session.get("routes", [])
-    prox      = session.get("prox", None)
-    done_keys = list(d["done"].keys())
+    d = get_data()
+    runs = d.get("runs", [])
+    active_run_id = session.get("active_run_id")
 
-    # Build all_pending_routes: deduplicated stops across ALL history
-    # keyed by address so same address doesn't appear twice across runs
-    seen_addresses = set()
-    all_pending_routes = []
-    for rec in d["history"]:
-        for r in rec.get("routes", []):
-            vol = r.get("volunteer", {})
-            pending_stops = []
-            for i, s in enumerate(r.get("stops", [])):
-                key = vol.get("name","") + "_" + str(i)
-                addr = s.get("address","")
-                if key not in done_keys and addr not in seen_addresses and addr:
-                    pending_stops.append({"stop": s, "index": i})
-                    seen_addresses.add(addr)
-            if pending_stops:
-                all_pending_routes.append({
-                    "volunteer": vol,
-                    "stops_with_index": pending_stops,
-                    "hex": r.get("hex", "#4a9eff"),
-                    "color": r.get("color", "blue"),
-                })
+    # Find active run to display
+    active_run = None
+    if active_run_id:
+        active_run = next((r for r in runs if r["id"] == active_run_id), None)
+    if not active_run and runs:
+        active_run = next((r for r in runs if r.get("status") == "active"), None)
 
-    return render_template("map.html", d=d, routes=routes, prox=prox,
-                           done_keys=done_keys,
-                           all_pending_routes=all_pending_routes,
+    # Compute completion for each run
+    for run in runs:
+        done_set = set(run.get("done_keys", []))
+        total = run.get("total_stops", 0)
+        done_count = sum(
+            1 for r in run.get("routes", [])
+            for i, s in enumerate(r.get("stops", []))
+            if r["volunteer"]["name"] + "_" + str(i) in done_set
+        )
+        run["done_count"] = done_count
+        run["pct"] = round(done_count / total * 100) if total else 0
+        if total > 0 and done_count >= total:
+            run["status"] = "complete"
+
+    return render_template("map.html", d=d,
+                           runs=runs,
+                           active_run=active_run,
                            HEX_COLORS=HEX_COLORS, COLORS=COLORS)
+
+@app.route("/map/select/<run_id>")
+@login_required
+def map_select_run(run_id):
+    session["active_run_id"] = run_id
+    return redirect(url_for("map_page"))
 
 @app.route("/map/reset")
 @login_required
 def map_reset():
-    session.pop("routes", None)
-    session.pop("prox", None)
+    session.pop("active_run_id", None)
     return redirect(url_for("map_page"))
 
 # ══════════════════════════════════════════════════════════════════════════════
-# ROUTES HISTORY
+# ROUTES / RUNS
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/routes", methods=["GET","POST"])
 @login_required
 def routes_page():
-    d = get_data()
+    d    = get_data()
+    runs = d.get("runs", [])
     if request.method == "POST":
         action = request.form.get("action")
+        run_id = request.form.get("run_id")
+
         if action == "delete_run":
-            ri = int(request.form.get("run_index",0))
-            if 0 <= ri < len(d["history"]):
-                d["history"].pop(ri)
-                save_session("history", d["history"])
-                if d["history"]:
-                    session["routes"] = d["history"][0]["routes"]
-                else:
-                    session["routes"] = []
-        elif action == "mark_done":
+            runs = [r for r in runs if r["id"] != run_id]
+            save_session("runs", runs)
+            if session.get("active_run_id") == run_id:
+                session.pop("active_run_id", None)
+
+        elif action in ("mark_done", "unmark_done"):
             key  = request.form.get("key")
             addr = request.form.get("address")
-            vid  = request.form.get("volunteer")
-            stop = int(request.form.get("stop_num",0))
-            done = {c["key"]:c for c in session.get("done",[])}
-            done[key]={"key":key,"address":addr,"volunteer":vid,"stop_num":stop,
-                       "delivered_date":datetime.now().strftime("%b %d, %Y")}
-            session["done"] = list(done.values())
-            save_data(d["cid"],"done",session["done"])
-            for a in d["addrs"]:
-                if a["address"]==addr:
-                    a["status"]="delivered"
-                    a["delivered_date"]=datetime.now().strftime("%b %d, %Y")
-            save_session("addrs",d["addrs"])
-        elif action == "unmark_done":
-            key  = request.form.get("key")
-            addr = request.form.get("address")
-            done = {c["key"]:c for c in session.get("done",[])}
-            done.pop(key,None)
-            session["done"] = list(done.values())
-            save_data(d["cid"],"done",session["done"])
-            for a in d["addrs"]:
-                if a["address"]==addr: a["status"]="pending"
-            save_session("addrs",d["addrs"])
-        return redirect(url_for("routes_page"))
-    done = {c["key"]:c for c in session.get("done",[])}
-    return render_template("routes.html", d=d, done=done, gmaps_url=gmaps_url)
+            for run in runs:
+                if run["id"] == run_id:
+                    done_keys = set(run.get("done_keys", []))
+                    if action == "mark_done":
+                        done_keys.add(key)
+                        # Also mark in constituent list
+                        for a in d["addrs"]:
+                            if a["address"] == addr:
+                                a["status"] = "delivered"
+                                a["delivered_date"] = datetime.now().strftime("%b %d, %Y")
+                        save_session("addrs", d["addrs"])
+                    else:
+                        done_keys.discard(key)
+                        for a in d["addrs"]:
+                            if a["address"] == addr: a["status"] = "pending"
+                        save_session("addrs", d["addrs"])
+                    run["done_keys"] = list(done_keys)
+                    # Recheck completion
+                    total = run.get("total_stops", 0)
+                    if total > 0 and len(done_keys) >= total:
+                        run["status"] = "complete"
+                    else:
+                        run["status"] = "active"
+                    break
+            save_session("runs", runs)
+
+        elif action == "rename_run":
+            new_name = request.form.get("new_name","").strip()
+            for run in runs:
+                if run["id"] == run_id and new_name:
+                    run["name"] = new_name
+                    break
+            save_session("runs", runs)
+
+        elif action == "close_run":
+            for run in runs:
+                if run["id"] == run_id:
+                    run["status"] = "complete"
+                    break
+            save_session("runs", runs)
+
+        elif action == "reopen_run":
+            for run in runs:
+                if run["id"] == run_id:
+                    run["status"] = "active"
+                    break
+            save_session("runs", runs)
+
+        return redirect(url_for("routes_page") + (f"?run_id={run_id}" if run_id else ""))
+
+    # Compute completion stats
+    for run in runs:
+        done_set = set(run.get("done_keys", []))
+        total    = run.get("total_stops", 0)
+        done_ct  = sum(
+            1 for r in run.get("routes",[])
+            for i, s in enumerate(r.get("stops",[]))
+            if r["volunteer"]["name"]+"_"+str(i) in done_set
+        )
+        run["done_count"] = done_ct
+        run["pct"]        = round(done_ct/total*100) if total else 0
+
+    selected_run_id = request.args.get("run_id") or (runs[0]["id"] if runs else None)
+    selected_run    = next((r for r in runs if r["id"] == selected_run_id), runs[0] if runs else None)
+
+    return render_template("routes.html", d=d, runs=runs,
+                           selected_run=selected_run,
+                           gmaps_url=gmaps_url)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ROUTE SEARCH
