@@ -135,20 +135,21 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
   {% if photo %}
   <div class="photo-preview">
     <img src="{{ photo.photo_url }}" alt="Sign photo" loading="lazy">
-    <div class="photo-badge">📸 {{ photo.taken_at[:10] }}</div>
+    <div class="photo-badge">📸 {{ photo.taken_at[:10] }}{% if not is_done %} · before{% else %} · placed{% endif %}</div>
   </div>
   {% endif %}
 
-  {% if not is_done %}
   <div class="stop-actions" id="actions-{{ loop.index0 }}">
-    <!-- Mark placed -->
+    {% if not is_done %}
+    <!-- Mark placed (no photo) -->
     <form method="POST" style="flex:1">
       <input type="hidden" name="action" value="mark_done">
       <input type="hidden" name="stop_key" value="{{ key }}">
       <button class="btn btn-done" type="submit">✅ Mark Placed</button>
     </form>
-    <!-- Photo upload -->
-    <form method="POST" enctype="multipart/form-data" style="flex:1" id="photo-form-{{ loop.index0 }}">
+    {% endif %}
+    <!-- Photo upload — always visible (before OR after placing) -->
+    <form method="POST" enctype="multipart/form-data" style="flex:{% if is_done %}1{% else %}1{% endif %}" id="photo-form-{{ loop.index0 }}">
       <input type="hidden" name="action" value="upload_photo">
       <input type="hidden" name="stop_key" value="{{ key }}">
       <input type="hidden" name="lat" id="lat-{{ loop.index0 }}">
@@ -157,11 +158,10 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
              class="camera-input" id="cam-{{ loop.index0 }}"
              onchange="submitPhoto({{ loop.index0 }})">
       <button type="button" class="btn btn-photo" onclick="openCamera({{ loop.index0 }})">
-        📷 Photo + Place
+        {% if photo %}📷 Replace Photo{% else %}📷 {% if is_done %}Add Photo{% else %}Photo + Place{% endif %}{% endif %}
       </button>
     </form>
   </div>
-  {% endif %}
 
   <!-- Directions -->
   <a class="dir-link" href="https://www.google.com/maps/dir/?api=1&destination={{ stop.address|urlencode }}" target="_blank">
