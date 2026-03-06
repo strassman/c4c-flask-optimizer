@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Routes{% endblock %}
 {% block content %}
-<h1>📍 Route History</h1>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+  <h1 style="margin:0">📍 Route History</h1>
+  <a href="/routes/search" class="btn btn-secondary btn-sm">🔍 Search Routes</a>
+</div>
 <p class="subtitle">Check off stops as you go</p>
 
 {% if not d.history %}
