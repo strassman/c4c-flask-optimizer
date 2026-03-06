@@ -16,12 +16,19 @@
     <div class="alert alert-info">Add volunteers first on the Volunteers page.</div>
     {% else %}
     <input type="text" id="vol-search" placeholder="🔍 Filter volunteers..." oninput="filterVols(this.value)" style="margin-bottom:10px">
+    <div id="vol-list">
     {% for v in d.vols %}
-    <label class="vol-item" style="display:flex;align-items:center;gap:10px;margin-top:8px;cursor:pointer;color:#ddd">
+    <label class="vol-item" style="display:flex;align-items:center;gap:10px;margin-top:8px;cursor:pointer;color:#ddd"
+      data-lat="{{ v.lat if v.lat else '' }}" data-lng="{{ v.lng if v.lng else '' }}" data-name="{{ v.name }}">
       <input type="checkbox" name="avail" value="{{ v.name }}" {% if v.name in avail %}checked{% endif %}>
-      <span><strong>{{ v.name }}</strong><br><span style="color:#888;font-size:12px">{{ v.address }}</span></span>
+      <span>
+        <strong>{{ v.name }}</strong>
+        <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:#f59e0b;font-weight:600"></span>
+        <br><span style="color:#888;font-size:12px">{{ v.address }}</span>
+      </span>
     </label>
     {% endfor %}
+    </div>
     {% endif %}
   </div>
 
@@ -100,6 +107,44 @@
 </form>
 
 <script>
+// Haversine distance in km
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function sortVolsByProximity() {
+  // Collect lats/lngs of checked addresses
+  const checkedIds = Array.from(document.querySelectorAll('input[name="run_ids"]:checked')).map(cb => cb.value);
+  const addrData = {{ addr_coords|tojson }};
+  const selectedCoords = addrData.filter(a => checkedIds.includes(a.id) && a.lat);
+
+  const volList = document.getElementById('vol-list');
+  if (!volList || selectedCoords.length === 0) return;
+
+  const items = Array.from(volList.querySelectorAll('.vol-item'));
+  items.forEach(item => {
+    const lat = parseFloat(item.dataset.lat);
+    const lng = parseFloat(item.dataset.lng);
+    if (!lat || !lng) { item.dataset.score = 99999; return; }
+    // Average distance to all selected addresses
+    const avgDist = selectedCoords.reduce((sum, a) => sum + haversine(lat, lng, a.lat, a.lng), 0) / selectedCoords.length;
+    item.dataset.score = avgDist;
+    const badge = item.querySelector('.prox-badge');
+    if (badge) {
+      badge.textContent = avgDist < 1 ? `${(avgDist*1000).toFixed(0)}m away` : `${avgDist.toFixed(1)}mi away`;
+      badge.style.display = 'inline';
+    }
+  });
+
+  // Sort by score
+  items.sort((a, b) => parseFloat(a.dataset.score) - parseFloat(b.dataset.score));
+  items.forEach(item => volList.appendChild(item));
+}
+
 function filterVols(q) {
   q = q.toLowerCase();
   document.querySelectorAll('.vol-item').forEach(el => {
@@ -126,7 +171,11 @@ function updateCount() {
   const checked = document.querySelectorAll('input[name="run_ids"]:checked').length;
   document.getElementById('run-count').textContent = checked + ' stop' + (checked !== 1 ? 's' : '') + ' selected';
 }
-document.querySelectorAll('input[name="run_ids"]').forEach(cb => cb.addEventListener('change', updateCount));
+document.querySelectorAll('input[name="run_ids"]').forEach(cb => {
+  cb.addEventListener('change', () => { updateCount(); sortVolsByProximity(); });
+});
+// Run on load if addresses already selected
+sortVolsByProximity();
 updateCount();
 
 function submitOptimize() {
