@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>{{ run.name }} — Delivery</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080a0f;--surface:#0e1117;--surface2:#141822;--surface3:#1c2130;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.13);
+  --text:#f0f2f7;--text2:#8b92a5;--text3:#535a6b;
+  --accent:#4f8ef7;--green:#34c759;--orange:#ff9500;--red:#ff3b30;
+  --radius:12px;--radius-sm:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:40px}
+
+/* Header */
+.hdr{background:rgba(8,10,15,.95);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:14px 18px;position:sticky;top:0;z-index:100}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.hdr-name{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.hdr-run{font-size:12px;color:var(--text3)}
+.prog-wrap{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px;background:var(--green);transition:width .4s}
+.prog-label{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:4px}
+
+/* Complete banner */
+.complete-banner{margin:20px 16px;background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.3);border-radius:var(--radius);padding:18px;text-align:center}
+.complete-banner .icon{font-size:36px;margin-bottom:8px}
+.complete-banner h2{font-size:18px;font-weight:600;color:var(--green);margin-bottom:4px}
+.complete-banner p{font-size:13px;color:var(--text2)}
+
+/* Stop cards */
+.stops{padding:16px}
+.stop-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;transition:border-color .2s}
+.stop-card.done{border-color:rgba(52,199,89,.3);background:rgba(52,199,89,.04)}
+.stop-card.active-stop{border-color:var(--accent)}
+
+.stop-header{display:flex;align-items:center;gap:12px;padding:14px 16px}
+.stop-num{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;border:2px solid}
+.stop-num.pending{border-color:var(--text3);color:var(--text3)}
+.stop-num.done{border-color:var(--green);color:var(--green);background:rgba(52,199,89,.1)}
+.stop-info{flex:1;min-width:0}
+.stop-addr{font-size:14px;font-weight:600;line-height:1.3}
+.stop-meta{font-size:12px;color:var(--text2);margin-top:2px}
+.stop-status{flex-shrink:0}
+
+.stop-actions{padding:0 16px 14px;display:flex;gap:8px;flex-wrap:wrap}
+.stop-actions.hidden{display:none}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;transition:opacity .15s,transform .1s;white-space:nowrap;text-decoration:none}
+.btn:active{transform:scale(.97)}
+.btn-done{background:var(--green);color:#fff;flex:1}
+.btn-photo{background:var(--surface2);color:var(--text2);border:1px solid var(--border);flex:1}
+.btn-photo:hover{border-color:var(--border2);color:var(--text)}
+.btn-nav{background:var(--accent);color:#fff;width:100%}
+.btn-sm{padding:7px 13px;font-size:12px}
+
+/* Photo preview */
+.photo-preview{margin:0 16px 14px;border-radius:var(--radius-sm);overflow:hidden;position:relative}
+.photo-preview img{width:100%;max-height:200px;object-fit:cover;display:block}
+.photo-badge{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.7);color:#fff;font-size:11px;padding:3px 8px;border-radius:10px;backdrop-filter:blur(4px)}
+
+/* Camera input hidden */
+.camera-input{display:none}
+
+/* Directions link */
+.dir-link{display:flex;align-items:center;gap:6px;padding:10px 16px;font-size:13px;color:var(--accent);border-top:1px solid var(--border);text-decoration:none}
+.dir-link:hover{background:var(--surface2)}
+
+/* GPS indicator */
+.gps-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);padding:2px 8px;border-radius:10px;background:var(--surface2)}
+.gps-chip.active{color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="hdr">
+  <div class="hdr-top">
+    <div>
+      <div class="hdr-name">Hi, {{ vol_name }}! 👋</div>
+      <div class="hdr-run">{{ run.name }}</div>
+    </div>
+    <div id="gps-chip" class="gps-chip">📍 GPS off</div>
+  </div>
+  <div class="prog-wrap">
+    <div class="prog-fill" id="prog-fill" style="width:{{ (done_ct/total*100)|round }}%"></div>
+  </div>
+  <div class="prog-label">
+    <span id="prog-label">{{ done_ct }} of {{ total }} placed</span>
+    <span id="prog-pct">{{ (done_ct/total*100)|round }}%</span>
+  </div>
+</div>
+
+{% if done_ct == total %}
+<div class="complete-banner">
+  <div class="icon">🎉</div>
+  <h2>All Done!</h2>
+  <p>You've placed all {{ total }} signs. Thank you!</p>
+</div>
+{% endif %}
+
+<div class="stops">
+{% for stop in vol_route.stops %}
+{% set key = vol_name + '_' + loop.index0|string %}
+{% set is_done = key in done_set %}
+{% set photo = photo_map.get(key) %}
+
+<div class="stop-card {% if is_done %}done{% elif loop.first and done_ct < total %}active-stop{% endif %}" id="card-{{ loop.index0 }}">
+  <div class="stop-header">
+    <div class="stop-num {% if is_done %}done{% else %}pending{% endif %}">
+      {% if is_done %}✓{% else %}{{ loop.index }}{% endif %}
+    </div>
+    <div class="stop-info">
+      <div class="stop-addr">{{ stop.address.split(',')[0] }}</div>
+      <div class="stop-meta">
+        {{ stop.address.split(',')[1:]|join(',') }}
+        {% if stop.contact %} · {{ stop.contact }}{% endif %}
+        {% if stop.phone %} · {{ stop.phone }}{% endif %}
+      </div>
+      {% if stop.note %}<div class="stop-meta" style="color:var(--orange)">📝 {{ stop.note }}</div>{% endif %}
+    </div>
+    {% if is_done %}
+    <div class="stop-status">
+      <span style="font-size:22px">✅</span>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if photo %}
+  <div class="photo-preview">
+    <img src="{{ photo.photo_url }}" alt="Sign photo" loading="lazy">
+    <div class="photo-badge">📸 {{ photo.taken_at[:10] }}</div>
+  </div>
+  {% endif %}
+
+  {% if not is_done %}
+  <div class="stop-actions" id="actions-{{ loop.index0 }}">
+    <!-- Mark placed -->
+    <form method="POST" style="flex:1">
+      <input type="hidden" name="action" value="mark_done">
+      <input type="hidden" name="stop_key" value="{{ key }}">
+      <button class="btn btn-done" type="submit">✅ Mark Placed</button>
+    </form>
+    <!-- Photo upload -->
+    <form method="POST" enctype="multipart/form-data" style="flex:1" id="photo-form-{{ loop.index0 }}">
+      <input type="hidden" name="action" value="upload_photo">
+      <input type="hidden" name="stop_key" value="{{ key }}">
+      <input type="hidden" name="lat" id="lat-{{ loop.index0 }}">
+      <input type="hidden" name="lng" id="lng-{{ loop.index0 }}">
+      <input type="file" name="photo" accept="image/*" capture="environment"
+             class="camera-input" id="cam-{{ loop.index0 }}"
+             onchange="submitPhoto({{ loop.index0 }})">
+      <button type="button" class="btn btn-photo" onclick="openCamera({{ loop.index0 }})">
+        📷 Photo + Place
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+  <!-- Directions -->
+  <a class="dir-link" href="https://www.google.com/maps/dir/?api=1&destination={{ stop.address|urlencode }}" target="_blank">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg>
+    Directions
+  </a>
+</div>
+{% endfor %}
+</div>
+
+<script>
+let userLat = null, userLng = null;
+
+// GPS
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLng = pos.coords.longitude;
+    document.getElementById('gps-chip').textContent = '📍 GPS on';
+    document.getElementById('gps-chip').classList.add('active');
+    // Fill lat/lng on all photo forms
+    document.querySelectorAll('[id^="lat-"]').forEach((el,i) => el.value = userLat);
+    document.querySelectorAll('[id^="lng-"]').forEach((el,i) => el.value = userLng);
+    highlightNearest();
+  }, null, {enableHighAccuracy:true, maximumAge:10000});
+}
+
+const stopCoords = {{ vol_route.stops|map(attribute='lat')|list|tojson }} ;
+const stopLngs   = {{ vol_route.stops|map(attribute='lng')|list|tojson }} ;
+const doneSet    = new Set({{ done_set|list|tojson }});
+
+function haversine(la1,lo1,la2,lo2){
+  const R=6371,dLa=(la2-la1)*Math.PI/180,dLo=(lo2-lo1)*Math.PI/180;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLo/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+
+function highlightNearest(){
+  if(!userLat) return;
+  let best=-1, bestDist=99999;
+  stopCoords.forEach((la,i)=>{
+    if(!la||doneSet.has('{{ vol_name }}_'+i)) return;
+    const d=haversine(userLat,userLng,la,stopLngs[i]);
+    if(d<bestDist){bestDist=d;best=i;}
+  });
+  document.querySelectorAll('.stop-card').forEach(c=>c.classList.remove('active-stop'));
+  if(best>=0){
+    const card=document.getElementById('card-'+best);
+    if(card){card.classList.add('active-stop');card.scrollIntoView({behavior:'smooth',block:'center'});}
+  }
+}
+
+function openCamera(idx){
+  document.getElementById('lat-'+idx).value = userLat||'';
+  document.getElementById('lng-'+idx).value = userLng||'';
+  document.getElementById('cam-'+idx).click();
+}
+
+function submitPhoto(idx){
+  const f = document.getElementById('photo-form-'+idx);
+  const file = document.getElementById('cam-'+idx).files[0];
+  if(!file) return;
+  // Show quick preview before submit
+  const reader = new FileReader();
+  reader.onload = e => {
+    const card = document.getElementById('card-'+idx);
+    const preview = document.createElement('div');
+    preview.className = 'photo-preview';
+    preview.innerHTML = `<img src="${e.target.result}" style="opacity:.7"><div class="photo-badge">Uploading...</div>`;
+    card.querySelector('.stop-actions').before(preview);
+  };
+  reader.readAsDataURL(file);
+  f.submit();
+}
+
+// Poll for progress updates every 30s (shows campaign's live view too)
+setInterval(async ()=>{
+  try{
+    const r = await fetch('/deliver/{{ run_id }}/{{ vol_token }}/progress');
+    const d = await r.json();
+    document.getElementById('prog-fill').style.width = d.pct+'%';
+    document.getElementById('prog-label').textContent = `${d.done} of ${d.total} placed`;
+    document.getElementById('prog-pct').textContent = d.pct+'%';
+  }catch(e){}
+}, 30000);
+</script>
+</body>
+</html>
