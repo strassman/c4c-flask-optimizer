@@ -577,19 +577,27 @@ def export_csv():
 @login_required
 def delivery_run():
     campaign_id=cid(); cname=session.get("cname","Campaign"); msg=None
-    vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
-    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").order("address").execute().data or [])
 
     if request.method == "POST":
         action=request.form.get("action")
         if action in ("optimize","proximity"):
             sel_vol_ids=request.form.getlist("selected_vols")
             sel_cst_ids=request.form.getlist("selected_addrs")
+            print(f"optimize: {len(sel_vol_ids)} vols, {len(sel_cst_ids)} stops, action={action}", flush=True)
             if not sel_vol_ids or not sel_cst_ids:
                 msg="❌ Select at least one volunteer and one address."
             else:
-                sel_vols=[v for v in vols if v["id"] in sel_vol_ids]
-                sel_addrs=[a for a in addrs if a["id"] in sel_cst_ids]
+                # Re-fetch from DB fresh for POST to avoid stale sanitized data
+                all_vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).execute().data or []
+                all_addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").execute().data or []
+                sel_vols=[dict(v) for v in all_vols if str(v["id"]) in sel_vol_ids]
+                sel_addrs=[dict(a) for a in all_addrs if str(a["id"]) in sel_cst_ids]
+                print(f"matched: {len(sel_vols)} vols, {len(sel_addrs)} addrs", flush=True)
+                if not sel_vols or not sel_addrs:
+                    msg="❌ Could not match selected volunteers or addresses. Please try again."
+                    vols=sanitize(all_vols); addrs=sanitize([a for a in all_addrs])
+                    addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
+                    return render_template("delivery_run.html",d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},msg=msg,addr_coords=addr_coords)
                 # Geocode missing
                 for v in sel_vols:
                     if not v.get("lat") and v.get("address"):
@@ -634,44 +642,57 @@ def delivery_run():
                         dist=round(sum(hav((v["lat"],v["lng"]),(s["lat"],s["lng"])) for s in stops)*0.621371,2)
                         routes.append({"volunteer":v,"stops":stops,"distance_miles":dist,"geometry":geom})
 
+                print(f"routes built: {len(routes)}, msg={msg}", flush=True)
                 if routes and not msg:
-                    run_id=str(uuid.uuid4())
-                    n_vols=len([r for r in routes if r["stops"]])
-                    n_stops=sum(len(r["stops"]) for r in routes)
-                    auto_name=f"{datetime.now().strftime('%b %d')} · {n_vols} vol{'s' if n_vols!=1 else ''} · {n_stops} stop{'s' if n_stops!=1 else ''}"
-                    db().table("runs").insert({
-                        "id":run_id,"campaign_id":campaign_id,
-                        "name":auto_name,"status":"active",
-                        "run_type":action,"total_stops":n_stops,"done_count":0,
-                    }).execute()
-                    for route in routes:
-                        vol=route["volunteer"]
-                        geom_json=json.dumps(route.get("geometry",[]))
-                        for order,stop in enumerate(route["stops"]):
-                            db().table("run_stops").insert({
-                                "id":str(uuid.uuid4()),"run_id":run_id,"campaign_id":campaign_id,
-                                "constituent_id":stop["id"],"volunteer_id":vol["id"],
-                                "volunteer_name":vol["name"],"stop_order":order,
-                                "address":stop["address"],
-                                "route_geometry":geom_json if order==0 else None,
-                                "distance_miles":route.get("distance_miles"),
-                                "status":"pending",
-                            }).execute()
-                        db().table("vol_tokens").insert({
-                            "id":str(uuid.uuid4()),"run_id":run_id,"campaign_id":campaign_id,
-                            "volunteer_id":vol["id"],"volunteer_name":vol["name"],
-                            "token":str(uuid.uuid4()),
-                            "expires_at":(datetime.now()+timedelta(hours=72)).isoformat(),
+                    try:
+                        run_id=str(uuid.uuid4())
+                        n_vols=len([r for r in routes if r["stops"]])
+                        n_stops=sum(len(r["stops"]) for r in routes)
+                        auto_name=f"{datetime.now().strftime('%b %d')} · {n_vols} vol{'s' if n_vols!=1 else ''} · {n_stops} stop{'s' if n_stops!=1 else ''}"
+                        print(f"inserting run: {run_id} name={auto_name}", flush=True)
+                        db().table("runs").insert({
+                            "id":run_id,"campaign_id":campaign_id,
+                            "name":auto_name,"status":"active",
+                            "run_type":action,"total_stops":n_stops,"done_count":0,
                         }).execute()
-                    session["active_run_id"]=run_id
-                    return redirect(url_for("map_page"))
+                        for route in routes:
+                            vol=route["volunteer"]
+                            geom_json=json.dumps(route.get("geometry",[]))
+                            for order,stop in enumerate(route["stops"]):
+                                db().table("run_stops").insert({
+                                    "id":str(uuid.uuid4()),"run_id":run_id,"campaign_id":campaign_id,
+                                    "constituent_id":str(stop["id"]),"volunteer_id":str(vol["id"]),
+                                    "volunteer_name":vol["name"],"stop_order":order,
+                                    "address":stop["address"],
+                                    "route_geometry":geom_json if order==0 else None,
+                                    "distance_miles":route.get("distance_miles"),
+                                    "status":"pending",
+                                }).execute()
+                            db().table("vol_tokens").insert({
+                                "id":str(uuid.uuid4()),"run_id":run_id,"campaign_id":campaign_id,
+                                "volunteer_id":str(vol["id"]),"volunteer_name":vol["name"],
+                                "token":str(uuid.uuid4()),
+                                "expires_at":(datetime.now()+timedelta(hours=72)).isoformat(),
+                            }).execute()
+                        print(f"run saved successfully, redirecting to map", flush=True)
+                        session["active_run_id"]=run_id
+                        return redirect(url_for("map_page"))
+                    except Exception as e:
+                        print(f"ERROR saving run: {e}", flush=True)
+                        import traceback; traceback.print_exc()
+                        msg=f"❌ Error saving run: {e}"
+                elif not routes:
+                    msg="❌ No routes built — check that volunteers and addresses have valid coordinates."
         return redirect(url_for("delivery_run"))
 
-    addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
+    # GET — load fresh data
+    vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
+    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").order("address").execute().data or [])
     for v in vols:
         if not v.get("lat") and v.get("address"):
             lat,lng=geocode(v["address"])
             if lat: v["lat"]=lat; v["lng"]=lng
+    addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
     return render_template("delivery_run.html",
                            d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},
                            msg=msg, addr_coords=addr_coords)
