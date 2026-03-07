@@ -1,126 +1,165 @@
 {% extends "base.html" %}
-{% block title %}Routes{% endblock %}
+{% block title %}Dispatch Archive{% endblock %}
 {% block extra_head %}
 <style>
-.runs-sidebar {
-  display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start;
-}
-@media(max-width:768px){ .runs-sidebar { grid-template-columns: 1fr; } }
+.archive-layout { display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start }
+@media(max-width:900px){ .archive-layout { grid-template-columns:1fr } }
 
 .run-list-item {
-  padding: 12px 14px; border-radius: var(--radius);
-  border: 1px solid var(--border); margin-bottom: 6px;
-  cursor: pointer; transition: all .15s; background: var(--surface);
-  display: block; text-decoration: none;
+  padding:11px 14px;border-radius:var(--radius);border:1px solid var(--border);
+  margin-bottom:6px;cursor:pointer;transition:all .15s;background:var(--surface);
+  display:block;position:relative;
 }
-.run-list-item:hover { border-color: var(--border2); background: var(--surface2); text-decoration: none; }
-.run-list-item.active { border-color: var(--accent); background: rgba(79,142,247,.08); }
-.run-list-item.complete { opacity: .55; }
+.run-list-item:hover { border-color:var(--border2);background:var(--surface2) }
+.run-list-item.selected { border-color:var(--accent);background:rgba(79,142,247,.08) }
+.run-list-item.complete { opacity:.6 }
 
-.run-dot { width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0;vertical-align:middle }
+.run-dot { width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;vertical-align:middle;flex-shrink:0 }
 .dot-active { background:var(--green);box-shadow:0 0 5px var(--green) }
 .dot-complete { background:var(--text3) }
+
+.type-badge {
+  display:inline-flex;align-items:center;gap:4px;
+  font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;
+  text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;
+}
+.badge-sign_delivery { background:rgba(79,142,247,.15);color:#4F8EF7 }
+.badge-lit_drop      { background:rgba(255,159,64,.15);color:#FF9F40 }
+.badge-door_knock    { background:rgba(107,203,119,.15);color:#6BCB77 }
+.badge-sign_recovery { background:rgba(255,107,107,.15);color:#FF6B6B }
+.badge-gotv          { background:rgba(199,125,255,.15);color:#C77DFF }
+.badge-general       { background:rgba(160,160,160,.15);color:#aaa }
+.badge-optimize      { background:rgba(79,142,247,.15);color:#4F8EF7 }
+.badge-proximity     { background:rgba(255,159,64,.15);color:#FF9F40 }
 
 .prog { height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;margin-top:6px }
 .prog-fill { height:100%;border-radius:2px }
 
-.stop-row {
-  display:flex;align-items:flex-start;gap:12px;
-  padding:10px 0;border-bottom:1px solid var(--border);
+.filter-tabs { display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px }
+.filter-tab {
+  padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;
+  cursor:pointer;color:var(--text2);transition:all .15s;border:1px solid var(--border);
+  background:transparent;font-family:inherit;
 }
+.filter-tab.active { background:var(--accent);color:#fff;border-color:var(--accent) }
+
+.stop-row { display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--border) }
 .stop-row:last-child { border-bottom:none }
+
+.vol-section { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden }
+.vol-section-header { display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none }
+.vol-section-header:hover { background:var(--surface2) }
+.vol-color-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0 }
+.vol-section-body { padding:0 16px;border-top:1px solid var(--border) }
+.vol-section-body.hidden { display:none }
 
 .rename-form { display:none;gap:8px;margin-top:8px }
 .rename-form.show { display:flex }
 
-.vol-section {
-  background:var(--surface);border:1px solid var(--border);
-  border-radius:var(--radius);margin-bottom:10px;overflow:hidden;
+.del-btn {
+  position:absolute;top:10px;right:10px;
+  background:none;border:none;cursor:pointer;
+  color:var(--text3);font-size:14px;padding:2px 4px;
+  line-height:1;border-radius:4px;transition:color .1s;
 }
-.vol-section-header {
-  display:flex;align-items:center;gap:10px;
-  padding:12px 16px;cursor:pointer;user-select:none;
-}
-.vol-section-header:hover { background:var(--surface2) }
-.vol-color-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0 }
-.vol-section-body { padding:0 16px; border-top:1px solid var(--border) }
-.vol-section-body.hidden { display:none }
+.del-btn:hover { color:#ff453a }
 </style>
 {% endblock %}
 {% block content %}
 
 {% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}" style="margin-bottom:16px">{{ msg }}</div>{% endif %}
 
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
   <div>
-    <h1 style="margin-bottom:2px">Delivery Runs</h1>
+    <h1 style="margin-bottom:2px">Dispatch Archive</h1>
     <p class="subtitle" style="margin:0">
       {{ runs|selectattr('status','equalto','active')|list|length }} active ·
-      {{ runs|selectattr('status','equalto','complete')|list|length }} complete
+      {{ runs|selectattr('status','equalto','complete')|list|length }} complete ·
+      {{ runs|length }} total
     </p>
   </div>
-  <a href="/routes/search" class="btn btn-secondary btn-sm">
-    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="9" r="5"/><line x1="14" y1="14" x2="18" y2="18"/></svg>
-    Search Runs
-  </a>
+  <a href="/dispatch" class="btn btn-primary btn-sm">+ New Dispatch</a>
 </div>
 
 {% if not runs %}
-<div class="alert alert-info">No runs yet. Go to Delivery Run to create your first optimized route.</div>
+<div class="alert alert-info">No dispatches yet. <a href="/dispatch" style="color:var(--accent)">Create your first one →</a></div>
 {% else %}
-<div class="runs-sidebar">
+<div class="archive-layout">
 
-  <!-- Left: run list -->
+  <!-- LEFT: run list -->
   <div>
-    <div style="margin-bottom:10px">
-      <input type="text" placeholder="Filter runs..." oninput="filterRunList(this.value)" style="margin:0">
+    <input type="text" id="run-search" placeholder="Search dispatches…" oninput="filterRuns(this.value)" style="margin-bottom:10px">
+
+    <div class="filter-tabs" id="type-tabs">
+      <button class="filter-tab active" onclick="setTab(this,'all')">All</button>
+      <button class="filter-tab" onclick="setTab(this,'sign_delivery')">🪧 Signs</button>
+      <button class="filter-tab" onclick="setTab(this,'lit_drop')">📚 Lit</button>
+      <button class="filter-tab" onclick="setTab(this,'door_knock')">🚪 Doors</button>
+      <button class="filter-tab" onclick="setTab(this,'sign_recovery')">🔄 Recovery</button>
+      <button class="filter-tab" onclick="setTab(this,'gotv')">🗳️ GOTV</button>
+      <button class="filter-tab" onclick="setTab(this,'general')">📋 General</button>
     </div>
+
+    {% set type_icons = {
+      'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪',
+      'sign_recovery':'🔄','gotv':'🗳️','general':'📋',
+      'optimize':'🪧','proximity':'🪧'
+    } %}
+    {% set type_labels = {
+      'sign_delivery':'Sign Delivery','lit_drop':'Lit Drop','door_knock':'Door Knock',
+      'sign_recovery':'Sign Recovery','gotv':'GOTV','general':'General',
+      'optimize':'Sign Delivery','proximity':'Sign Delivery'
+    } %}
+
     <div id="run-list">
     {% for run in runs %}
     {% set pct = run.pct if run.pct is defined else 0 %}
-    <div class="run-list-item {% if selected_run and run.id==selected_run.id %}active{% endif %} {% if run.status=='complete' %}complete{% endif %}"
-       data-search="{{ run.name|lower }} {{ (run.vol_names or [])|join(' ')|lower }}"
-       style="position:relative">
-      <a href="/routes?run_id={{ run.id }}" style="display:block;text-decoration:none;color:inherit;padding-right:28px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-            <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>{{ run.name }}
-          </span>
-          <span style="font-size:11px;color:var(--text3);white-space:nowrap">{{ pct }}%</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">
-          {{ run.timestamp[:16] if run.timestamp else '' }} · {{ run.type or 'optimized' }} · {{ run.total_stops or 0 }} stops
-        </div>
-        <div class="prog"><div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
-      </a>
-      <form method="POST" onsubmit="return confirm('Delete this run?')"
-            style="position:absolute;top:10px;right:10px">
+    {% set rtype = run.type or run.run_type or 'sign_delivery' %}
+    <div class="run-list-item {% if run.status=='complete' %}complete{% endif %}"
+         data-type="{{ rtype }}"
+         data-search="{{ run.name|lower }} {{ (run.vol_names or [])|join(' ')|lower }} {{ rtype }}"
+         onclick="selectRun('{{ run.id }}')">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;padding-right:20px">
+        <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>
+        <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ run.name }}</span>
+        <span style="font-size:11px;color:var(--text3);white-space:nowrap">{{ pct }}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="type-badge badge-{{ rtype }}">{{ type_icons.get(rtype,'📋') }} {{ type_labels.get(rtype, rtype) }}</span>
+        <span style="font-size:11px;color:var(--text3)">{{ run.timestamp[:10] if run.timestamp else '' }}</span>
+        <span style="font-size:11px;color:var(--text3)">· {{ run.total_stops or 0 }} stops</span>
+      </div>
+      <div class="prog"><div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
+      <form method="POST" onsubmit="event.stopPropagation();return confirm('Delete this dispatch and all its stops?')">
         <input type="hidden" name="action" value="delete_run">
         <input type="hidden" name="run_id" value="{{ run.id }}">
-        <button type="submit" title="Delete run"
-                style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px;line-height:1;border-radius:4px"
-                onmouseover="this.style.color='#ff453a'" onmouseout="this.style.color='var(--text3)'">✕</button>
+        <button type="submit" class="del-btn" title="Delete" onclick="event.stopPropagation()">✕</button>
       </form>
     </div>
     {% endfor %}
     </div>
+    <p id="no-results" style="display:none;color:var(--text3);font-size:13px;margin-top:10px">No dispatches match.</p>
   </div>
 
-  <!-- Right: selected run detail -->
-  <div>
+  <!-- RIGHT: detail panel -->
+  <div id="detail-panel">
   {% if selected_run %}
   {% set run = selected_run %}
   {% set done_ids = run.done_keys if run.done_keys else [] %}
   {% set pct = run.pct if run.pct is defined else 0 %}
   {% set done_ct = run.done_count if run.done_count is defined else 0 %}
+  {% set rtype = run.type or run.run_type or 'sign_delivery' %}
+  {% set type_icons = {'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪','sign_recovery':'🔄','gotv':'🗳️','general':'📋','optimize':'🪧','proximity':'🪧'} %}
+  {% set type_labels = {'sign_delivery':'Sign Delivery','lit_drop':'Lit Drop','door_knock':'Door Knock','sign_recovery':'Sign Recovery','gotv':'GOTV','general':'General','optimize':'Sign Delivery','proximity':'Sign Delivery'} %}
 
   <div class="card" style="margin-bottom:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="flex:1">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
           <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>
           <strong style="font-size:16px;letter-spacing:-0.02em" id="run-name-display">{{ run.name }}</strong>
           <button onclick="toggleRename()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 6px;border-radius:4px;font-family:inherit">✏️</button>
+          <span class="type-badge badge-{{ rtype }}">{{ type_icons.get(rtype,'📋') }} {{ type_labels.get(rtype,rtype) }}</span>
         </div>
         <div class="rename-form" id="rename-form">
           <form method="POST" style="display:flex;gap:6px;flex:1">
@@ -132,13 +171,14 @@
           </form>
         </div>
         <div style="font-size:12px;color:var(--text3)">
-          {{ run.timestamp[:16] if run.timestamp else '' }} · {{ run.type or 'optimized' }} ·
-          {{ run.routes|length }} volunteer{% if run.routes|length != 1 %}s{% endif %} · {{ run.total_stops }} stops
+          {{ run.timestamp[:16] if run.timestamp else '' }} ·
+          {{ run.routes|length }} volunteer{% if run.routes|length!=1 %}s{% endif %} ·
+          {{ run.total_stops }} stops
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <a href="/map/select/{{ run.id }}" class="btn btn-primary btn-sm">🗺 Map</a>
-        {% if run.status == 'active' %}
+        {% if run.status=='active' %}
         <form method="POST" style="display:inline">
           <input type="hidden" name="action" value="close_run">
           <input type="hidden" name="run_id" value="{{ run.id }}">
@@ -151,7 +191,7 @@
           <button class="btn btn-secondary btn-sm" type="submit">↩ Reopen</button>
         </form>
         {% endif %}
-        <form method="POST" onsubmit="return confirm('Delete this run?')" style="display:inline">
+        <form method="POST" onsubmit="return confirm('Delete this dispatch?')" style="display:inline">
           <input type="hidden" name="action" value="delete_run">
           <input type="hidden" name="run_id" value="{{ run.id }}">
           <button class="btn btn-danger btn-sm" type="submit">Delete</button>
@@ -171,8 +211,7 @@
 
   <!-- Share links -->
   <div class="card" style="margin-bottom:12px">
-    <div class="card-title" style="margin-bottom:8px">📱 Volunteer Share Links</div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Send each volunteer their personal link — no login needed.</p>
+    <div class="card-title" style="margin-bottom:8px">📱 Volunteer Links</div>
     {% for vt in run.vol_tokens or [] %}
     {% set share_url = request.host_url ~ 'deliver/' ~ run.id ~ '/' ~ vt.token %}
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -181,10 +220,10 @@
         <div style="font-size:11px;color:var(--text3);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ share_url }}</div>
       </div>
       <a href="sms:?body={{ share_url|urlencode }}" class="btn btn-success btn-sm" style="flex-shrink:0">💬 Text</a>
-      <button class="btn btn-secondary btn-sm" onclick="copyLink('{{ share_url }}', this)" style="flex-shrink:0">📋 Copy</button>
+      <button class="btn btn-secondary btn-sm" onclick="copyLink('{{ share_url }}',this)" style="flex-shrink:0">📋 Copy</button>
     </div>
     {% else %}
-    <p style="color:var(--text3);font-size:13px">No tokens — re-run optimization to generate links.</p>
+    <p style="color:var(--text3);font-size:13px">No links — re-run dispatch to generate.</p>
     {% endfor %}
   </div>
 
@@ -193,19 +232,17 @@
   {% for r in run.routes %}
   {% set vol_name = r.volunteer_name or 'Unknown' %}
   {% set hex = hex_list[loop.index0 % hex_list|length] %}
-  {% set r_done = r.stops | selectattr('status','equalto','delivered') | list | length %}
+  {% set r_done = r.stops|selectattr('status','equalto','delivered')|list|length %}
   <div class="vol-section">
     <div class="vol-section-header" onclick="toggleSection(this)">
       <span class="vol-color-dot" style="background:{{ hex }}"></span>
       <strong style="flex:1">{{ vol_name }}</strong>
-      <span style="font-size:12px;color:var(--text3)">
-        {{ r_done }}/{{ r.stops|length }} done{% if r.distance_miles %} · {{ r.distance_miles }} mi{% endif %}
-      </span>
+      <span style="font-size:12px;color:var(--text3)">{{ r_done }}/{{ r.stops|length }} done{% if r.distance_miles %} · {{ r.distance_miles }} mi{% endif %}</span>
       <span style="color:var(--text3);font-size:12px;margin-left:8px">▾</span>
     </div>
     <div class="vol-section-body">
     {% for s in r.stops %}
-    {% set is_done = s.status == 'delivered' or s.id in done_ids %}
+    {% set is_done = s.status=='delivered' or s.id in done_ids %}
     <div class="stop-row">
       <form method="POST" style="display:contents">
         <input type="hidden" name="run_id"  value="{{ run.id }}">
@@ -219,15 +256,9 @@
         color:{% if is_done %}#34c759{% else %}{{ hex }}{% endif %};
         font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px">{{ loop.index }}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;{% if is_done %}color:var(--text3);text-decoration:line-through{% else %}color:var(--text){% endif %}">
-          {{ s.address }}
-        </div>
-        {% if s.delivered_at %}
-        <div style="font-size:11px;color:var(--green);margin-top:1px">✅ Delivered {{ s.delivered_at[:16] if s.delivered_at else '' }}</div>
-        {% endif %}
-        {% if s.photo_url %}
-        <div style="margin-top:6px"><img src="{{ s.photo_url }}" style="max-width:180px;border-radius:6px;border:1px solid var(--border)"></div>
-        {% endif %}
+        <div style="font-size:13px;{% if is_done %}color:var(--text3);text-decoration:line-through{% else %}color:var(--text){% endif %}">{{ s.address }}</div>
+        {% if s.delivered_at %}<div style="font-size:11px;color:var(--green);margin-top:1px">✅ {{ s.delivered_at[:16] if s.delivered_at else '' }}</div>{% endif %}
+        {% if s.photo_url %}<div style="margin-top:6px"><img src="{{ s.photo_url }}" style="max-width:180px;border-radius:6px;border:1px solid var(--border)"></div>{% endif %}
         <a href="https://www.google.com/maps/dir/?api=1&destination={{ s.address|urlencode }}" target="_blank" style="font-size:12px;color:var(--accent)">Directions →</a>
       </div>
     </div>
@@ -237,7 +268,11 @@
   {% endfor %}
 
   {% else %}
-  <div class="alert alert-info">Select a run from the left to view its stops.</div>
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;color:var(--text3);text-align:center">
+    <div style="font-size:40px;margin-bottom:12px">📋</div>
+    <div style="font-size:15px;font-weight:500;margin-bottom:6px">Select a dispatch</div>
+    <div style="font-size:13px">Click any run on the left to view its stops and volunteer links</div>
+  </div>
   {% endif %}
   </div>
 
@@ -245,25 +280,60 @@
 {% endif %}
 
 <script>
-function filterRunList(q){
-  q = q.toLowerCase();
+let activeTab='all';
+let activeSearch='';
+
+function setTab(btn, type){
+  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  activeTab=type;
+  applyFilters();
+}
+
+function filterRuns(q){
+  activeSearch=q.toLowerCase();
+  applyFilters();
+}
+
+function applyFilters(){
+  let visible=0;
   document.querySelectorAll('.run-list-item').forEach(el=>{
-    el.style.display = el.dataset.search.includes(q) ? '' : 'none';
+    const matchType = activeTab==='all' || el.dataset.type===activeTab;
+    const matchSearch = !activeSearch || el.dataset.search.includes(activeSearch);
+    el.style.display = (matchType && matchSearch) ? '' : 'none';
+    if(matchType && matchSearch) visible++;
   });
+  document.getElementById('no-results').style.display = visible===0 ? '' : 'none';
 }
-function toggleRename(){
-  document.getElementById('rename-form').classList.toggle('show');
+
+function selectRun(id){
+  window.location.href = '/routes?run_id=' + id;
 }
+
+// Highlight selected run in list
+{% if selected_run %}
+document.querySelectorAll('.run-list-item').forEach(el=>{
+  if(el.dataset && el.onclick && el.onclick.toString().includes('{{ selected_run.id }}')){
+    el.classList.add('selected');
+  }
+});
+// More reliable: match by onclick attr
+document.querySelectorAll('.run-list-item').forEach(el=>{
+  const onc = el.getAttribute('onclick') || '';
+  if(onc.includes('{{ selected_run.id }}')) el.classList.add('selected');
+});
+{% endif %}
+
+function toggleRename(){document.getElementById('rename-form').classList.toggle('show');}
 function toggleSection(header){
   header.parentElement.querySelector('.vol-section-body').classList.toggle('hidden');
-  const arrow = header.querySelector('span:last-child');
-  if(arrow) arrow.textContent = arrow.textContent === '▾' ? '▸' : '▾';
+  const arrow=header.querySelector('span:last-child');
+  if(arrow) arrow.textContent=arrow.textContent==='▾'?'▸':'▾';
 }
-function copyLink(url, btn){
+function copyLink(url,btn){
   navigator.clipboard.writeText(url).then(()=>{
-    const orig = btn.textContent;
-    btn.textContent = '✅ Copied!';
-    setTimeout(()=>btn.textContent=orig, 2000);
+    const orig=btn.textContent; btn.textContent='✅ Copied!';
+    setTimeout(()=>btn.textContent=orig,2000);
   });
 }
 </script>
