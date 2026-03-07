@@ -574,6 +574,7 @@ def export_csv():
 # DELIVERY RUN
 # ══════════════════════════════════════════════════════════════════════════════
 @app.route("/delivery-run", methods=["GET","POST"])
+@app.route("/dispatch", methods=["GET","POST"])
 @login_required
 def delivery_run():
     campaign_id=cid(); cname=session.get("cname","Campaign"); msg=None
@@ -655,12 +656,14 @@ def delivery_run():
                         run_id=str(uuid.uuid4())
                         n_vols=len([r for r in routes if r["stops"]])
                         n_stops=sum(len(r["stops"]) for r in routes)
+                        dispatch_type=request.form.get("dispatch_type","sign_delivery")
+                        routing_method=action  # optimize or proximity
                         auto_name=f"{datetime.now().strftime('%b %d')} · {n_vols} vol{'s' if n_vols!=1 else ''} · {n_stops} stop{'s' if n_stops!=1 else ''}"
-                        print(f"inserting run: {run_id} name={auto_name}", flush=True)
+                        print(f"inserting run: {run_id} name={auto_name} type={dispatch_type}", flush=True)
                         db().table("runs").insert({
                             "id":run_id,"campaign_id":campaign_id,
                             "name":auto_name,"status":"active",
-                            "run_type":action,"total_stops":n_stops,"done_count":0,
+                            "run_type":dispatch_type,"total_stops":n_stops,"done_count":0,
                         }).execute()
                         for route in routes:
                             vol=route["volunteer"]
@@ -701,9 +704,18 @@ def delivery_run():
             if lat: v["lat"]=lat; v["lng"]=lng
     addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
     import json as _json
-    return render_template("delivery_run.html",
+    dispatch_types=[
+        {"id":"sign_delivery","label":"Sign Delivery","icon":"🪧","desc":"Drop off yard signs, photo proof required"},
+        {"id":"lit_drop",     "label":"Lit Drop",     "icon":"📚","desc":"Leave literature at doors, no photo needed"},
+        {"id":"door_knock",   "label":"Door Knock",   "icon":"🚪","desc":"Canvassing — track contacts at each door"},
+        {"id":"sign_recovery","label":"Sign Recovery","icon":"🔄","desc":"Collect missing or damaged signs"},
+        {"id":"gotv",         "label":"GOTV",         "icon":"🗳️","desc":"Get Out The Vote — staging and call lists"},
+        {"id":"general",      "label":"General",      "icon":"📋","desc":"Custom volunteer dispatch"},
+    ]
+    return render_template("dispatch.html",
                            d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},
                            msg=msg,
+                           dispatch_types=dispatch_types,
                            addr_coords_json=_json.dumps(addr_coords))
 
 # ══════════════════════════════════════════════════════════════════════════════
