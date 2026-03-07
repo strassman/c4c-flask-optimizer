@@ -2,198 +2,85 @@
 {% block title %}Map{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <style>
-/* ── Layout ───────────────────────────────────────────────── */
-.map-page {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 16px;
-  height: calc(100vh - 110px);
-}
-@media(max-width:768px){
-  .map-page { grid-template-columns: 1fr; height: auto; }
-}
-
-/* ── Left sidebar ─────────────────────────────────────────── */
-.map-sidebar {
-  display: flex; flex-direction: column; gap: 6px;
-  overflow-y: auto; padding-right: 2px;
-}
-
-.sidebar-section-label {
-  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--text3);
-  padding: 8px 10px 4px; margin-top: 4px;
-}
-.sidebar-section-label:first-child { margin-top: 0; }
-
-.map-nav-btn {
-  display: flex; align-items: center; gap: 10px;
-  padding: 9px 12px; border-radius: var(--radius-sm);
-  border: 1px solid transparent;
-  background: transparent; color: var(--text2);
-  cursor: pointer; font-size: 13px; font-weight: 500;
-  font-family: inherit; text-align: left; width: 100%;
-  transition: all .15s; position: relative;
-}
-.map-nav-btn:hover {
-  background: var(--surface2); color: var(--text);
-  border-color: var(--border);
-}
-.map-nav-btn.active {
-  background: var(--surface2); color: var(--text);
-  border-color: var(--border2);
-}
-.map-nav-btn.active::before {
-  content: '';
-  position: absolute; left: 0; top: 20%; bottom: 20%;
-  width: 3px; border-radius: 0 2px 2px 0;
-  background: var(--accent);
-}
-.map-nav-icon {
-  width: 30px; height: 30px; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; font-size: 14px;
-}
-.map-nav-badge {
-  margin-left: auto; background: var(--accent); color: #fff;
-  border-radius: 10px; padding: 1px 7px;
-  font-size: 10px; font-weight: 600; flex-shrink: 0;
-}
-.map-nav-badge.green { background: var(--green); }
-.map-nav-badge.gray  { background: var(--surface3); color: var(--text3); }
-
-.sidebar-divider {
-  height: 1px; background: var(--border); margin: 4px 0;
-}
-
-/* Coming soon items */
-.map-nav-btn.soon {
-  opacity: .4; cursor: default;
-}
-.map-nav-btn.soon:hover {
-  background: transparent; color: var(--text2); border-color: transparent;
-}
-.soon-tag {
-  margin-left: auto; font-size: 10px; color: var(--text3);
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 1px 6px; font-weight: 500;
-}
-
-/* ── Map area ─────────────────────────────────────────────── */
-.map-area { position: relative; display: flex; flex-direction: column; gap: 10px; }
-
-.map-topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 8px; flex-shrink: 0;
-}
-.map-title { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
-.map-subtitle { font-size: 12px; color: var(--text3); margin-top: 2px; }
-
-#map {
-  flex: 1; min-height: 520px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-}
-
-/* ── Runs drawer ──────────────────────────────────────────── */
-.drawer {
-  position: absolute; top: 0; right: 0; z-index: 600;
-  width: 300px; height: 100%;
-  background: rgba(8,10,15,0.97); backdrop-filter: blur(20px);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius-lg);
-  display: flex; flex-direction: column;
-  transform: translateX(110%);
-  transition: transform .25s cubic-bezier(.4,0,.2,1);
-  overflow: hidden;
-  box-shadow: -8px 0 32px rgba(0,0,0,.4);
-}
-.drawer.open { transform: translateX(-8px); }
-.drawer-header {
-  padding: 16px 18px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.drawer-header h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
-.drawer-search {
-  width: 100%; padding: 8px 12px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); color: var(--text); font-size: 13px;
-  font-family: inherit; outline: none;
-}
-.drawer-search:focus { border-color: var(--accent); }
-.drawer-close {
-  position: absolute; top: 14px; right: 14px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; width: 26px; height: 26px;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer; color: var(--text2); font-size: 14px; transition: all .15s;
-}
-.drawer-close:hover { background: var(--surface3); color: var(--text); }
-.filter-tabs {
-  display: flex; gap: 4px; padding: 8px 14px;
-  border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.filter-tab {
-  padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500;
-  cursor: pointer; color: var(--text2); transition: all .15s; border: none;
-  background: transparent; font-family: inherit;
-}
-.filter-tab.active { background: var(--surface2); color: var(--text); }
-.runs-list { flex: 1; overflow-y: auto; padding: 10px; }
-.run-item {
-  padding: 12px 14px; border-radius: var(--radius);
-  border: 1px solid var(--border); margin-bottom: 8px;
-  cursor: pointer; transition: all .15s; background: var(--surface);
-}
-.run-item:hover { border-color: var(--border2); background: var(--surface2); }
-.run-item.selected { border-color: var(--accent); background: rgba(79,142,247,.08); }
-.run-item.complete { opacity: .55; }
-.run-item-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-.run-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.3; }
-.run-status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
-.dot-active   { background: var(--green); box-shadow: 0 0 6px var(--green); }
-.dot-complete { background: var(--text3); }
-.run-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-.run-meta-chip { font-size: 11px; color: var(--text3); background: var(--surface2); padding: 2px 7px; border-radius: 10px; }
-.progress-bar { height: 3px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; border-radius: 2px; transition: width .3s; }
-.progress-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-top: 4px; }
-.run-vols { font-size: 12px; color: var(--text2); margin-top: 6px; }
-
-/* ── Legend ───────────────────────────────────────────────── */
-.map-legend {
-  position: absolute; bottom: 16px; left: 16px; z-index: 400;
-  background: rgba(8,10,15,0.92); backdrop-filter: blur(12px);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;
-  max-width: 240px; max-height: 300px; overflow-y: auto;
-}
-.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); min-width: 0; }
-.legend-row span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.map-page{display:grid;grid-template-columns:220px 1fr;gap:16px;height:calc(100vh - 110px)}
+@media(max-width:768px){.map-page{grid-template-columns:1fr;height:auto}}
+.map-sidebar{display:flex;flex-direction:column;gap:6px;overflow-y:auto;padding-right:2px}
+.sidebar-section-label{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);padding:8px 10px 4px;margin-top:4px}
+.sidebar-section-label:first-child{margin-top:0}
+.map-nav-btn{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);border:1px solid transparent;background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;text-align:left;width:100%;transition:all .15s;position:relative}
+.map-nav-btn:hover{background:var(--surface2);color:var(--text);border-color:var(--border)}
+.map-nav-btn.active{background:var(--surface2);color:var(--text);border-color:var(--border2)}
+.map-nav-btn.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;width:3px;border-radius:0 2px 2px 0;background:var(--accent)}
+.map-nav-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.map-nav-badge{margin-left:auto;background:var(--accent);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:600;flex-shrink:0}
+.map-nav-badge.green{background:var(--green)}.map-nav-badge.gray{background:var(--surface3);color:var(--text3)}
+.map-nav-badge.red{background:var(--red)}
+.sidebar-divider{height:1px;background:var(--border);margin:4px 0}
+.map-nav-btn.soon{opacity:.4;cursor:default}
+.map-nav-btn.soon:hover{background:transparent;color:var(--text2);border-color:transparent}
+.soon-tag{margin-left:auto;font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 5px}
+.map-area{display:flex;flex-direction:column;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);position:relative}
+.map-topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;flex-shrink:0}
+.map-title{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.map-subtitle{font-size:12px;color:var(--text3);margin-top:1px}
+#map{flex:1;min-height:400px}
+.drawer{position:absolute;top:0;right:0;bottom:0;width:300px;background:var(--surface);border-left:1px solid var(--border);z-index:1000;display:flex;flex-direction:column;transform:translateX(110%);transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.drawer.open{transform:translateX(0)}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.drawer-header h3{font-size:14px;font-weight:600}
+.drawer-close{cursor:pointer;color:var(--text3);font-size:16px;padding:2px 6px;border-radius:4px}
+.drawer-close:hover{background:var(--surface2);color:var(--text)}
+.filter-tabs{display:flex;gap:4px;padding:10px 12px;flex-shrink:0}
+.filter-tab{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;color:var(--text2);transition:all .15s;border:1px solid var(--border);background:transparent;font-family:inherit}
+.filter-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.runs-list{overflow-y:auto;flex:1;padding:0 12px 12px}
+.run-item{padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:6px;cursor:pointer;transition:all .15s;background:var(--surface2)}
+.run-item:hover{border-color:var(--border2)}.run-item.selected{border-color:var(--accent)}
+.run-item.complete{opacity:.6}
+.run-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.run-name{font-size:13px;font-weight:600;color:var(--text)}
+.run-status-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-active{background:var(--green);box-shadow:0 0 5px var(--green)}.dot-complete{background:var(--text3)}
+.run-meta{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.run-meta-chip{font-size:10px;color:var(--text3);background:var(--surface3);padding:1px 6px;border-radius:4px}
+.progress-bar{height:3px;background:var(--surface3);border-radius:2px;overflow:hidden;margin-bottom:3px}
+.progress-fill{height:100%;border-radius:2px;transition:width .3s}
+.progress-label{display:flex;justify-content:space-between;font-size:10px;color:var(--text3)}
+.run-vols{font-size:11px;color:var(--text3);margin-top:4px}
+.map-legend{position:absolute;bottom:16px;left:16px;background:rgba(14,17,23,.9);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;z-index:500;max-width:220px;font-size:12px}
+.legend-row{display:flex;align-items:center;gap:8px;padding:2px 0;color:var(--text2)}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* Loading indicator */
+.map-loading{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(14,17,23,.9);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--text2);z-index:600;display:none;gap:6px;align-items:center}
+.map-loading.show{display:flex}
+.mini-spinner{width:12px;height:12px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Cluster styles */
+.marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(79,142,247,.2)!important}
+.marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(79,142,247,.6)!important;color:#fff!important;font-weight:700!important}
 </style>
 {% endblock %}
 {% block content %}
-
 <div class="map-page">
-
-  <!-- ── Left Sidebar ───────────────────────────────────────── -->
   <div class="map-sidebar">
+    <div class="sidebar-section-label">Views</div>
 
-    <div class="sidebar-section-label">Delivery</div>
-
-    <button class="map-nav-btn {% if not active_run %}{% else %}{% endif %}" id="nav-routes" onclick="switchMap('routes')">
+    <button class="map-nav-btn" id="nav-routes" onclick="switchMap('routes')">
       <div class="map-nav-icon" style="background:rgba(79,142,247,.15)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg>
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
       </div>
       Active Routes
-      <span class="map-nav-badge">{{ runs|selectattr('status','equalto','active')|list|length }}</span>
+      <span class="map-nav-badge" id="badge-runs">{{ runs|selectattr('status','equalto','active')|list|length }}</span>
     </button>
 
     <button class="map-nav-btn" id="nav-pending" onclick="switchMap('pending')">
       <div class="map-nav-icon" style="background:rgba(255,149,0,.15)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 2"/></svg>
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l3 3"/></svg>
       </div>
       Pending Stops
     </button>
@@ -203,7 +90,7 @@
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="1.8"><polygon points="1,4 7,1 13,4 19,1 19,16 13,19 7,16 1,19"/><line x1="7" y1="1" x2="7" y2="16"/><line x1="13" y1="4" x2="13" y2="19"/></svg>
       </div>
       All Constituents
-      <span class="map-nav-badge gray">{{ d.addrs|length }}</span>
+      <span class="map-nav-badge gray" id="badge-total">—</span>
     </button>
 
     <button class="map-nav-btn" id="nav-missing" onclick="switchMap('missing')">
@@ -211,76 +98,50 @@
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#ff3b30" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><line x1="10" y1="6" x2="10" y2="9"/><circle cx="10" cy="11.5" r=".8" fill="#ff3b30"/></svg>
       </div>
       Missing / Stolen
-      <span class="map-nav-badge" id="missing-badge" style="background:var(--red)">{{ d.addrs|selectattr('missing','equalto',true)|list|length }}</span>
+      <span class="map-nav-badge red" id="badge-missing">—</span>
     </button>
 
     <div class="sidebar-divider"></div>
     <div class="sidebar-section-label">Coming Soon</div>
 
     <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg>
-      </div>
+      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg></div>
       Sign Density
       <span class="soon-tag">soon</span>
     </button>
-
     <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M3 3h14v14H3z"/><path d="M3 8h14M3 13h14M8 3v14M13 3v14" opacity=".5"/></svg>
-      </div>
+      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M3 3h14v14H3z"/><path d="M3 8h14M3 13h14M8 3v14M13 3v14" opacity=".5"/></svg></div>
       Precinct Map
       <span class="soon-tag">soon</span>
     </button>
-
     <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M6 10a4 4 0 008 0"/><path d="M10 6v1M10 13v1M6.5 7.5l.7.7M12.8 12.8l.7.7"/></svg>
-      </div>
+      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M6 10a4 4 0 008 0"/></svg></div>
       Heat Map
       <span class="soon-tag">soon</span>
     </button>
-
     <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M2 14l4-8 4 5 3-3 5 6"/></svg>
-      </div>
+      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M2 14l4-8 4 5 3-3 5 6"/></svg></div>
       Progress Over Time
       <span class="soon-tag">soon</span>
     </button>
-
-    <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><circle cx="10" cy="7" r="3"/><path d="M4 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>
-      </div>
-      Volunteer Coverage
-      <span class="soon-tag">soon</span>
-    </button>
-
   </div>
 
-  <!-- ── Map Area ───────────────────────────────────────────── -->
   <div class="map-area">
-
-    <!-- Top bar -->
     <div class="map-topbar">
       <div>
         <div class="map-title" id="map-title">Active Routes</div>
-        <div class="map-subtitle" id="map-subtitle">
-          {% if active_run %}Viewing: {{ active_run.name }}{% else %}Select a run from the drawer{% endif %}
-        </div>
+        <div class="map-subtitle" id="map-subtitle">{% if active_run %}Viewing: {{ active_run.name }}{% else %}Select a run from the drawer{% endif %}</div>
       </div>
-      <!-- Stats pills -->
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block"></span>
           <span style="font-size:12px;color:var(--text2)">Placed</span>
-          <strong style="font-size:12px;color:var(--text)">{{ d.addrs|selectattr('status','equalto','delivered')|list|length }}</strong>
+          <strong style="font-size:12px;color:var(--text)" id="stat-placed">—</strong>
         </div>
         <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--orange);display:inline-block"></span>
           <span style="font-size:12px;color:var(--text2)">Pending</span>
-          <strong style="font-size:12px;color:var(--text)">{{ d.addrs|selectattr('status','ne','delivered')|list|length }}</strong>
+          <strong style="font-size:12px;color:var(--text)" id="stat-pending">—</strong>
         </div>
         <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent);display:inline-block"></span>
@@ -294,13 +155,12 @@
       </div>
     </div>
 
-    <!-- Map container -->
-    <div style="position:relative;flex:1">
+    <div style="position:relative;flex:1;display:flex;flex-direction:column">
+      <div class="map-loading" id="map-loading"><div class="mini-spinner"></div><span id="loading-text">Loading…</span></div>
 
-      <!-- Runs drawer -->
       <div class="drawer" id="runs-drawer">
         <div class="drawer-header">
-          <h3>Delivery Runs</h3>
+          <h3>Dispatch Runs</h3>
           <div class="drawer-close" onclick="toggleDrawer()">✕</div>
         </div>
         <div class="filter-tabs">
@@ -308,16 +168,16 @@
           <button class="filter-tab" onclick="setFilter('active',this)">Active</button>
           <button class="filter-tab" onclick="setFilter('complete',this)">Complete</button>
         </div>
+        <div style="padding:0 12px 8px"><input type="text" placeholder="Search runs…" oninput="filterRuns(this.value)" style="margin:0"></div>
         <div class="runs-list">
           {% if not runs %}
-          <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No runs yet. Use Delivery Run to create one.</div>
+          <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No runs yet.</div>
           {% endif %}
           {% for run in runs %}
           {% set pct = run.pct if run.pct is defined else 0 %}
-          {% set done_ct = run.done_count if run.done_count is defined else 0 %}
           <div class="run-item {% if active_run and run.id==active_run.id %}selected{% endif %} {% if run.status=='complete' %}complete{% endif %}"
                data-status="{{ run.status }}"
-               data-search="{{ run.name|lower }} {{ run.timestamp|lower }} {{ run.vol_names|join(' ')|lower }}"
+               data-search="{{ run.name|lower }} {{ run.vol_names|join(' ')|lower }}"
                onclick="selectRun('{{ run.id }}')">
             <div class="run-item-header">
               <div class="run-name">{{ run.name }}</div>
@@ -327,98 +187,143 @@
               <span class="run-meta-chip">{{ run.timestamp[:6] if run.timestamp else '—' }}</span>
               <span class="run-meta-chip">{{ run.routes|length }} vol{% if run.routes|length!=1%}s{% endif %}</span>
               <span class="run-meta-chip">{{ run.total_stops }} stops</span>
-              <span class="run-meta-chip">{{ run.type }}</span>
             </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div>
-            </div>
-            <div class="progress-label">
-              <span>{{ done_ct }}/{{ run.total_stops }} done</span>
-              <span>{{ pct }}%</span>
-            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
+            <div class="progress-label"><span>{{ run.done_count }}/{{ run.total_stops }} done</span><span>{{ pct }}%</span></div>
             {% if run.vol_names %}<div class="run-vols">{{ run.vol_names|join(', ') }}</div>{% endif %}
           </div>
           {% endfor %}
         </div>
       </div>
 
-      <!-- Legend -->
       <div class="map-legend" id="map-legend"></div>
-
-      <div id="map"></div>
+      <div id="map" style="flex:1;min-height:400px"></div>
     </div>
-
   </div>
 </div>
 
 <script>
 const HEX_COLORS = {{ hex_colors_json|safe }};
-const allAddrs   = {{ addrs_json|safe }};
 const activeRun  = {{ active_run_json|safe }};
 const allRuns    = {{ runs_json|safe }};
 
-// ── Map init ───────────────────────────────────────────────
+// ── Map init ──────────────────────────────────────────────────
 const map = L.map('map',{preferCanvas:true,zoomControl:false}).setView([39.2904,-76.6122],11);
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'©OpenStreetMap ©CartoDB',maxZoom:19}).addTo(map);
 
+// ── Cluster group for constituent views ───────────────────────
+let clusterGroup = null;
+function getClusterGroup(color){
+  if(clusterGroup){ map.removeLayer(clusterGroup); }
+  clusterGroup = L.markerClusterGroup({
+    maxClusterRadius: 60,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true,
+    iconCreateFunction: function(cluster){
+      const count = cluster.getChildCount();
+      const size = count > 1000 ? 'large' : count > 100 ? 'medium' : 'small';
+      const sz = size==='large'?44:size==='medium'?36:28;
+      return L.divIcon({
+        html:`<div style="background:${color}22;border:2px solid ${color}66;border-radius:50%;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;font-size:${sz<36?10:12}px;font-weight:700;color:${color}">${count>999?Math.round(count/1000)+'k':count}</div>`,
+        className:'', iconSize:[sz,sz]
+      });
+    }
+  });
+  map.addLayer(clusterGroup);
+  return clusterGroup;
+}
+
 let layers=[];
-function clearLayers(){ layers.forEach(l=>map.removeLayer(l)); layers=[]; }
+function clearLayers(){ layers.forEach(l=>map.removeLayer(l)); layers=[]; if(clusterGroup){map.removeLayer(clusterGroup);clusterGroup=null;} }
 function addLayer(l){ l.addTo(map); layers.push(l); return l; }
 function fitBounds(pts){ if(pts.length) map.fitBounds(pts,{padding:[40,40]}); }
 function setLegend(html){ document.getElementById('map-legend').innerHTML=html||''; }
+function showLoading(text){ const el=document.getElementById('map-loading'); el.classList.add('show'); document.getElementById('loading-text').textContent=text||'Loading…'; }
+function hideLoading(){ document.getElementById('map-loading').classList.remove('show'); }
 
-// ── Sidebar nav ────────────────────────────────────────────
-let currentMap = 'routes';
+// ── Load stats ────────────────────────────────────────────────
+async function loadStats(){
+  try{
+    const r = await fetch('/api/constituents/stats');
+    const d = await r.json();
+    document.getElementById('stat-placed').textContent  = d.placed.toLocaleString();
+    document.getElementById('stat-pending').textContent = d.pending.toLocaleString();
+    document.getElementById('badge-total').textContent  = d.total.toLocaleString();
+    document.getElementById('badge-missing').textContent = d.missing.toLocaleString();
+  } catch(e){}
+}
+loadStats();
+
+// ── Viewport constituent loading ──────────────────────────────
+let vpTimer = null;
+let currentView = 'routes';
+
+async function loadViewportConstituents(statusFilter='all'){
+  const b = map.getBounds();
+  const params = new URLSearchParams({
+    south: b.getSouth(), north: b.getNorth(),
+    west:  b.getWest(),  east:  b.getEast(),
+    status: statusFilter
+  });
+  showLoading('Loading…');
+  try{
+    const r = await fetch('/api/constituents?'+params);
+    const data = await r.json();
+    return data;
+  } catch(e){ return []; }
+  finally{ hideLoading(); }
+}
+
+function scheduleViewportLoad(){
+  clearTimeout(vpTimer);
+  vpTimer = setTimeout(()=>{ if(currentView==='master'||currentView==='missing') renderMap(currentView); }, 300);
+}
+map.on('moveend', scheduleViewportLoad);
+map.on('zoomend', scheduleViewportLoad);
+
+// ── Sidebar nav ───────────────────────────────────────────────
 function switchMap(id){
-  currentMap = id;
+  currentView = id;
   document.querySelectorAll('.map-nav-btn:not(.soon)').forEach(b=>b.classList.remove('active'));
   const btn = document.getElementById('nav-'+id);
   if(btn) btn.classList.add('active');
   const titles = {
-    routes:  ['Active Routes',  activeRun ? 'Viewing: '+activeRun.name : 'Select a run from the drawer'],
-    pending: ['Pending Stops',  'All unfinished stops across active runs'],
-    master:  ['All Constituents', allAddrs.length+' addresses on file'],
-    missing: ['Missing / Stolen Signs', missingAddrs.length+' reported missing'],
+    routes:  ['Active Routes',   activeRun ? 'Viewing: '+activeRun.name : 'Select a run from the drawer'],
+    pending: ['Pending Stops',   'All unfinished stops across active runs'],
+    master:  ['All Constituents','Zoom in to see individual addresses'],
+    missing: ['Missing / Stolen Signs', 'Reported missing or stolen'],
   };
-  document.getElementById('map-title').textContent    = titles[id][0];
-  document.getElementById('map-subtitle').textContent = titles[id][1];
+  const t = titles[id] || titles.routes;
+  document.getElementById('map-title').textContent    = t[0];
+  document.getElementById('map-subtitle').textContent = t[1];
   renderMap(id);
 }
 
-// ── Drawer ─────────────────────────────────────────────────
+// ── Drawer ────────────────────────────────────────────────────
 let drawerOpen=false, currentFilter='all';
-function toggleDrawer(){
-  drawerOpen=!drawerOpen;
-  document.getElementById('runs-drawer').classList.toggle('open',drawerOpen);
-}
-function setFilter(f,el){
-  currentFilter=f;
-  document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  applyFilters();
-}
+function toggleDrawer(){ drawerOpen=!drawerOpen; document.getElementById('runs-drawer').classList.toggle('open',drawerOpen); }
+function setFilter(f,el){ currentFilter=f; document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); applyFilters(); }
 function filterRuns(q){ applyFilters(q.toLowerCase()); }
 function applyFilters(q=''){
   document.querySelectorAll('.run-item').forEach(el=>{
-    const statusOk = currentFilter==='all'||el.dataset.status===currentFilter;
-    const searchOk = !q||el.dataset.search.includes(q);
-    el.style.display=(statusOk&&searchOk)?'':'none';
+    const ok=(currentFilter==='all'||el.dataset.status===currentFilter)&&(!q||el.dataset.search.includes(q));
+    el.style.display=ok?'':'none';
   });
 }
 function selectRun(id){ window.location.href='/map/select/'+id; }
 
-// ── Icon helpers ───────────────────────────────────────────
-function volIcon(hex){
-  return L.divIcon({html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.5)">🏠</div>`,iconSize:[28,28],iconAnchor:[14,14],className:''});
-}
+// ── Icon helpers ──────────────────────────────────────────────
+function volIcon(hex){ return L.divIcon({html:`<div style="background:${hex};width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.5)">🏠</div>`,iconSize:[28,28],iconAnchor:[14,14],className:''}); }
 function numIcon(hex,num,done){
   if(done) return L.divIcon({html:`<div style="background:#34c759;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;box-shadow:0 2px 6px rgba(52,199,89,.4)">✓</div>`,iconSize:[24,24],iconAnchor:[12,12],className:''});
   return L.divIcon({html:`<div style="background:#fff;color:${hex};border:2.5px solid ${hex};border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px;box-shadow:0 2px 5px rgba(0,0,0,.3)">${num}</div>`,iconSize:[26,26],iconAnchor:[13,13],className:''});
 }
+function partyColor(p){ const m={'D':'#4F8EF7','R':'#FF6B6B','G':'#6BCB77','L':'#FFD93D','U':'#8b92a5'}; return m[(p||'U')[0].toUpperCase()]||'#8b92a5'; }
 
-// ── Render functions ───────────────────────────────────────
-function renderMap(view){
+// ── Main render ───────────────────────────────────────────────
+async function renderMap(view){
   clearLayers();
   const bounds=[];
   let legend='';
@@ -426,17 +331,15 @@ function renderMap(view){
   if(view==='routes' && activeRun){
     const doneIds=new Set(activeRun.done_keys||[]);
     activeRun.routes.forEach((r,ri)=>{
-      const vol=r.volunteer,hex=HEX_COLORS[ri%HEX_COLORS.length];
+      const vol=r.volunteer, hex=HEX_COLORS[ri%HEX_COLORS.length];
       if(!vol.lat) return;
       bounds.push([vol.lat,vol.lng]);
       addLayer(L.marker([vol.lat,vol.lng],{icon:volIcon(hex)}).bindPopup(`<b>🏠 ${vol.name}</b><br><small>${vol.address||''}</small>`));
-      // Draw route line: use OSRM geometry if available, else straight lines vol→stops
       const stopCoords=r.stops.filter(s=>s.lat&&s.lng).map(s=>[s.lat,s.lng]);
       if(r.geometry&&r.geometry.length>1){
         addLayer(L.polyline(r.geometry,{color:hex,weight:4,opacity:.7}));
       } else if(stopCoords.length){
-        const linePts=[[vol.lat,vol.lng],...stopCoords];
-        addLayer(L.polyline(linePts,{color:hex,weight:3,opacity:.6,dashArray:'6,4'}));
+        addLayer(L.polyline([[vol.lat,vol.lng],...stopCoords],{color:hex,weight:3,opacity:.6,dashArray:'6,4'}));
       }
       let doneCt=0;
       r.stops.forEach((s,i)=>{
@@ -444,63 +347,67 @@ function renderMap(view){
         bounds.push([s.lat,s.lng]);
         const isDone=s.status==='delivered'||doneIds.has(s.id);
         if(isDone) doneCt++;
-        const contact=s.contact?`<br>👤 ${s.contact}`:'';
-        const phone=s.phone?`<br>📞 ${s.phone}`:'';
-        const photo=s.photo_url?`<br><img src="${s.photo_url}" style="width:100%;max-width:200px;border-radius:6px;margin-top:6px">` :'';
+        const photo=s.photo_url?`<br><img src="${s.photo_url}" style="width:100%;max-width:200px;border-radius:6px;margin-top:6px">`:'';
         const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address||'')}/${encodeURIComponent(s.address)}`;
         addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,isDone)}).bindPopup(
-          `<b>Stop ${i+1}${isDone?' ✅':''}</b><br>${s.address}${contact}${phone}<br><b style="color:${hex}">${vol.name}</b><br><a href="${dir}" target="_blank">📍 Directions</a>${photo}`,
-          {maxWidth:260}));
+          `<b>Stop ${i+1}${isDone?' ✅':''}</b><br>${s.address}<br><b style="color:${hex}">${vol.name}</b><br><a href="${dir}" target="_blank">📍 Directions</a>${photo}`,{maxWidth:260}));
       });
-      const total=r.stops.length;
-      legend+=`<div class="legend-row"><span class="legend-dot" style="background:${hex}"></span><span>${vol.name} · ${doneCt}/${total} done</span></div>`;
+      legend+=`<div class="legend-row"><span class="legend-dot" style="background:${hex}"></span><span>${vol.name} · ${doneCt}/${r.stops.length}</span></div>`;
     });
     if(!legend) legend='<div class="legend-row" style="color:var(--text3)">Select a run to view routes</div>';
+    fitBounds(bounds);
 
   } else if(view==='pending'){
-    // All pending stops across ALL active runs, deduplicated by address
     const seen=new Set();
     allRuns.filter(r=>r.status==='active').forEach((run,ri)=>{
       const doneIds=new Set(run.done_keys||[]);
       run.routes.forEach((r,rj)=>{
         const vol=r.volunteer, hex=HEX_COLORS[rj%HEX_COLORS.length];
-        if(!vol.lat) return;
         r.stops.forEach((s,i)=>{
-          if(!s.lat||!s.lng||seen.has(s.address)) return;
-          if(s.status==='delivered'||doneIds.has(s.id)) return;
-          seen.add(s.address); bounds.push([s.lat,s.lng]);
-          const contact=s.contact?`<br>👤 ${s.contact}`:'', phone=s.phone?`<br>📞 ${s.phone}`:'';
-          const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address||'')}/${encodeURIComponent(s.address)}`;
-          addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,false)}).bindPopup(`<b>⏳ Stop ${i+1}</b><br>${s.address}${contact}${phone}<br><b style="color:${hex}">${vol.name}</b> · ${run.name}<br><a href="${dir}" target="_blank">📍 Directions</a>`,{maxWidth:240}));
+          if(!s.lat||!s.lng||seen.has(s.id)||s.status==='delivered'||doneIds.has(s.id)) return;
+          seen.add(s.id); bounds.push([s.lat,s.lng]);
+          addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,false)}).bindPopup(`<b>⏳ ${s.address}</b><br><b style="color:${hex}">${vol.name}</b> · ${run.name}`,{maxWidth:240}));
         });
       });
     });
     legend=seen.size?`<div class="legend-row"><span style="color:var(--orange);font-weight:600">${seen.size} pending stops</span></div>`:'<div class="legend-row" style="color:var(--green)">✅ All stops complete!</div>';
+    fitBounds(bounds);
 
-  } else {
-    // Master — all constituents
-    allAddrs.forEach(a=>{
-      if(!a.lat) return;
-      bounds.push([a.lat,a.lng]);
-      if(a.status==='delivered'){
-        addLayer(L.marker([a.lat,a.lng],{icon:L.divIcon({html:`<div style="background:#34c759;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff">✓</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''})}).bindPopup(`<b>✅ ${a.address}</b><br><small>${a.delivered_date||''}</small>`));
-      } else {
-        addLayer(L.circleMarker([a.lat,a.lng],{radius:7,color:'#535a6b',fillColor:'#8b92a5',fillOpacity:.8,weight:1.5}).bindPopup(`<b>⏳ ${a.address}</b>`));
-      }
+  } else if(view==='master' || view==='missing'){
+    // Viewport-based clustered loading
+    const statusFilter = view==='missing' ? 'missing' : 'all';
+    const data = await loadViewportConstituents(statusFilter);
+
+    const cg = getClusterGroup(view==='missing'?'#FF6B6B':'#4F8EF7');
+    let placedCt=0, pendingCt=0;
+
+    data.forEach(a=>{
+      if(!a.lat||!a.lng) return;
+      if(view==='missing' && !a.missing) return;
+      const isDone = a.status==='delivered';
+      if(isDone) placedCt++; else pendingCt++;
+      const color = isDone ? '#34c759' : (view==='missing' ? '#FF6B6B' : partyColor(a.party));
+      const sz = isDone ? 18 : 14;
+      const marker = L.circleMarker([a.lat,a.lng],{
+        radius: sz/2, color, fillColor: color,
+        fillOpacity: isDone?0.9:0.7, weight: isDone?2:1.5
+      });
+      const name = [a.first_name,a.last_name].filter(Boolean).join(' ');
+      const party = a.party ? `<span style="color:${partyColor(a.party)}">${a.party}</span> · ` : '';
+      const photo = a.photo_url ? `<br><img src="${a.photo_url}" style="width:100%;max-width:180px;border-radius:5px;margin-top:5px">` : '';
+      marker.bindPopup(`<b>${isDone?'✅ ':'⏳ '}${a.address}</b>${name?`<br>👤 ${name}`:''}${a.party?`<br>${party}`:''}${photo}`,{maxWidth:220});
+      cg.addLayer(marker);
     });
-    const placed=allAddrs.filter(a=>a.status==='delivered').length;
-    const pending=allAddrs.length-placed;
-    legend=''; // Stats shown in bottom bar
+
+    const viewLabel = view==='missing' ? 'missing' : 'in view';
+    legend=`<div class="legend-row"><span class="legend-dot" style="background:var(--green)"></span><span>${placedCt} placed ${viewLabel}</span></div><div class="legend-row"><span class="legend-dot" style="background:var(--orange)"></span><span>${pendingCt} pending ${viewLabel}</span></div>`;
+    if(view==='master') legend += `<div class="legend-row" style="color:var(--text3);font-size:10px;margin-top:4px">Zoom in for details · max 2,000/view</div>`;
   }
 
   setLegend(legend);
-  fitBounds(bounds);
 }
 
-// ── Missing signs ──────────────────────────────────────────
-const missingAddrs = allAddrs.filter(a => a.missing);
-
-// ── Init ───────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────
 switchMap(activeRun ? 'routes' : 'master');
 </script>
 {% endblock %}
