@@ -40,14 +40,18 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 .btn-photo:hover{border-color:var(--border2);color:var(--text)}
 .btn-danger{background:transparent;border:1px solid rgba(255,59,48,.3);color:var(--red);padding:6px 12px;font-size:12px}
 .photo-wrap{margin:0 16px 14px;border-radius:var(--radius-sm);overflow:hidden;position:relative}
-.photo-wrap img{width:100%;max-height:220px;object-fit:cover;display:block}
-.photo-overlay{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.75));padding:10px 12px;display:flex;align-items:center;justify-content:space-between}
-.photo-badge{font-size:11px;color:#fff}.photo-actions{display:flex;gap:6px}
+.photo-wrap img{width:100%;max-height:260px;object-fit:cover;display:block}
+.photo-overlay{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.8));padding:10px 12px;display:flex;align-items:center;justify-content:space-between}
+.photo-badge{font-size:11px;color:#fff}
+.uploading-overlay{position:absolute;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:#fff;font-size:13px;font-weight:600}
+.spinner{width:28px;height:28px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .camera-input{display:none}
 .dir-link{display:flex;align-items:center;gap:6px;padding:10px 16px;font-size:13px;color:var(--accent);border-top:1px solid var(--border);text-decoration:none}
 .dir-link:hover{background:var(--surface2)}
 .gps-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--text3);padding:2px 8px;border-radius:10px;background:var(--surface2)}
 .gps-chip.active{color:var(--green)}
+.photo-taken-badge{display:flex;align-items:center;gap:6px;margin:0 16px 10px;font-size:12px;color:var(--green);background:rgba(52,199,89,.1);border:1px solid rgba(52,199,89,.25);border-radius:8px;padding:7px 12px}
 </style>
 </head>
 <body>
@@ -58,7 +62,7 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
   </div>
   <div class="prog-wrap"><div class="prog-fill" id="prog-fill" style="width:{{ (done_ct/total*100)|round if total else 0 }}%"></div></div>
   <div class="prog-label">
-    <span id="prog-label">{{ done_ct }} of {{ total }} placed</span>
+    <span id="prog-label">{{ done_ct }} of {{ total }} done</span>
     <span id="prog-pct">{{ (done_ct/total*100)|round if total else 0 }}%</span>
   </div>
   {% if run.notes %}
@@ -71,14 +75,17 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
 {% if done_ct == total and total > 0 %}
 <div class="complete-banner">
   <div class="icon">🎉</div><h2>All Done!</h2>
-  <p>You've placed all {{ total }} signs. Thank you!</p>
+  <p>You've completed all {{ total }} stops. Thank you!</p>
 </div>
 {% endif %}
 
 <div class="stops">
 {% for stop in stops %}
 {% set is_done = stop.status == 'delivered' %}
+{% set has_photo = stop.photo_url and stop.photo_url != '' %}
 <div class="stop-card {% if is_done %}done{% elif loop.first and done_ct < total %}active-stop{% endif %}" id="card-{{ loop.index0 }}">
+
+  <!-- Header -->
   <div class="stop-header">
     <div class="stop-num {% if is_done %}done{% else %}pending{% endif %}">
       {% if is_done %}✓{% else %}{{ loop.index }}{% endif %}
@@ -86,48 +93,67 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
     <div class="stop-info">
       <div class="stop-addr">{{ stop.address.split(',')[0] }}</div>
       <div class="stop-meta">{{ stop.address.split(',')[1:]|join(',') }}</div>
-      {% if stop.volunteer_name %}<div class="stop-meta">{{ stop.volunteer_name }}</div>{% endif %}
     </div>
-    {% if is_done and not stop.photo_url %}<span style="font-size:22px">✅</span>{% endif %}
   </div>
 
-  {% if stop.photo_url %}
+  <!-- Photo (once taken, this is all they see — no replace) -->
+  {% if has_photo %}
   <div class="photo-wrap" id="photo-wrap-{{ loop.index0 }}">
     <img src="{{ stop.photo_url }}" alt="Sign photo" loading="lazy">
     <div class="photo-overlay">
-      <div class="photo-badge">📸 {{ stop.photo_taken_at or '' }}</div>
-      <div class="photo-actions">
-        <button type="button" class="btn btn-photo" style="padding:4px 10px;font-size:11px;flex:unset" onclick="openCamera('{{ stop.id }}',{{ loop.index0 }})">Replace</button>
-        <form method="POST" style="display:inline">
-          <input type="hidden" name="action" value="delete_photo">
-          <input type="hidden" name="stop_id" value="{{ stop.id }}">
-          <button type="submit" class="btn btn-danger" onclick="return confirm('Delete photo?')">Delete</button>
-        </form>
-      </div>
+      <div class="photo-badge">📸 {{ stop.photo_taken_at or 'Photo taken' }}</div>
     </div>
   </div>
   {% endif %}
 
+  <!-- Uploading placeholder (hidden until JS activates it) -->
+  <div class="photo-wrap" id="upload-wrap-{{ loop.index0 }}" style="display:none;background:var(--surface2);min-height:120px">
+    <div class="uploading-overlay" style="position:relative;min-height:120px">
+      <div class="spinner"></div>
+      <span>Uploading photo…</span>
+    </div>
+  </div>
+
+  <!-- Actions -->
   <div class="stop-actions" id="actions-{{ loop.index0 }}">
     {% if not is_done %}
-    <form method="POST" style="flex:1">
-      <input type="hidden" name="action" value="mark_done">
-      <input type="hidden" name="stop_id" value="{{ stop.id }}">
-      <button class="btn btn-done" type="submit">✅ Mark Placed</button>
-    </form>
+      {% if not has_photo %}
+      <!-- Show both buttons: photo auto-marks done, or they can mark done without photo -->
+      <form method="POST" enctype="multipart/form-data" style="flex:2" id="photo-form-{{ loop.index0 }}">
+        <input type="hidden" name="action" value="upload_photo">
+        <input type="hidden" name="stop_id" value="{{ stop.id }}">
+        <input type="hidden" name="lat" id="lat-{{ loop.index0 }}">
+        <input type="hidden" name="lng" id="lng-{{ loop.index0 }}">
+        <input type="file" name="photo" accept="image/*" capture="environment"
+               class="camera-input" id="cam-{{ loop.index0 }}"
+               onchange="submitPhoto({{ loop.index0 }})">
+        <button type="button" class="btn btn-done" onclick="openCamera({{ loop.index0 }})" style="width:100%">
+          📷 Photo + Done
+        </button>
+      </form>
+      <form method="POST" style="flex:1">
+        <input type="hidden" name="action" value="mark_done">
+        <input type="hidden" name="stop_id" value="{{ stop.id }}">
+        <button class="btn btn-photo" type="submit" style="width:100%">✅ No Photo</button>
+      </form>
+      {% else %}
+      <!-- Has photo but not marked done yet (edge case) -->
+      <form method="POST" style="flex:1">
+        <input type="hidden" name="action" value="mark_done">
+        <input type="hidden" name="stop_id" value="{{ stop.id }}">
+        <button class="btn btn-done" type="submit">✅ Mark Done</button>
+      </form>
+      {% endif %}
+    {% else %}
+      <!-- Done — show photo taken badge or done badge, no more actions -->
+      {% if has_photo %}
+      <div class="photo-taken-badge" style="margin:0;flex:1">
+        ✅ Done · 📸 Photo saved
+      </div>
+      {% else %}
+      <div style="padding:2px 0;font-size:13px;color:var(--green);flex:1">✅ Marked done</div>
+      {% endif %}
     {% endif %}
-    <form method="POST" enctype="multipart/form-data" style="flex:1" id="photo-form-{{ loop.index0 }}">
-      <input type="hidden" name="action" value="upload_photo">
-      <input type="hidden" name="stop_id" value="{{ stop.id }}">
-      <input type="hidden" name="lat" id="lat-{{ loop.index0 }}">
-      <input type="hidden" name="lng" id="lng-{{ loop.index0 }}">
-      <input type="file" name="photo" accept="image/*" capture="environment"
-             class="camera-input" id="cam-{{ loop.index0 }}"
-             onchange="submitPhoto({{ loop.index0 }})">
-      <button type="button" class="btn btn-photo" onclick="openCamera('{{ stop.id }}',{{ loop.index0 }})">
-        📷 {% if stop.photo_url %}Replace Photo{% elif is_done %}Add Photo{% else %}Photo + Place{% endif %}
-      </button>
-    </form>
   </div>
 
   <a class="dir-link" href="https://www.google.com/maps/dir/?api=1&destination={{ stop.address|urlencode }}" target="_blank">
@@ -143,14 +169,14 @@ let userLat=null, userLng=null;
 if(navigator.geolocation){
   navigator.geolocation.watchPosition(pos=>{
     userLat=pos.coords.latitude; userLng=pos.coords.longitude;
-    const chip=document.getElementById('gps-chip');
-    chip.textContent='📍 GPS on'; chip.classList.add('active');
+    document.getElementById('gps-chip').textContent='📍 GPS on';
+    document.getElementById('gps-chip').classList.add('active');
     document.querySelectorAll('[id^="lat-"]').forEach(el=>el.value=userLat);
     document.querySelectorAll('[id^="lng-"]').forEach(el=>el.value=userLng);
   },()=>{document.getElementById('gps-chip').textContent='📍 GPS off'},{enableHighAccuracy:true,maximumAge:10000});
 }
 
-function openCamera(stopId, idx){
+function openCamera(idx){
   document.getElementById('lat-'+idx).value=userLat||'';
   document.getElementById('lng-'+idx).value=userLng||'';
   document.getElementById('cam-'+idx).click();
@@ -159,27 +185,35 @@ function openCamera(stopId, idx){
 function submitPhoto(idx){
   const file=document.getElementById('cam-'+idx).files[0];
   if(!file) return;
+
+  // Show uploading spinner immediately
+  const card=document.getElementById('card-'+idx);
+  document.getElementById('upload-wrap-'+idx).style.display='';
+  document.getElementById('actions-'+idx).style.display='none';
+  card.querySelectorAll('button').forEach(b=>b.disabled=true);
+
+  // Also show a preview of the image while uploading
   const reader=new FileReader();
   reader.onload=e=>{
-    const card=document.getElementById('card-'+idx);
-    let wrap=document.getElementById('photo-wrap-'+idx);
-    if(!wrap){
-      wrap=document.createElement('div'); wrap.className='photo-wrap'; wrap.id='photo-wrap-'+idx;
-      card.querySelector('.stop-actions').before(wrap);
-    }
-    wrap.innerHTML=`<img src="${e.target.result}"><div class="photo-overlay"><div class="photo-badge">📤 Uploading...</div></div>`;
-    card.querySelectorAll('button').forEach(b=>{b.disabled=true;b.style.opacity='.5';});
+    const uploadWrap=document.getElementById('upload-wrap-'+idx);
+    uploadWrap.innerHTML=`
+      <img src="${e.target.result}" style="width:100%;max-height:200px;object-fit:cover;display:block;opacity:.6">
+      <div class="uploading-overlay">
+        <div class="spinner"></div>
+        <span>Uploading…</span>
+      </div>`;
     document.getElementById('photo-form-'+idx).submit();
   };
   reader.readAsDataURL(file);
 }
 
+// Poll progress every 30s
 setInterval(async()=>{
   try{
     const r=await fetch('/deliver/{{ run_id }}/{{ vol_token }}/progress');
     const d=await r.json();
     document.getElementById('prog-fill').style.width=d.pct+'%';
-    document.getElementById('prog-label').textContent=`${d.done} of ${d.total} placed`;
+    document.getElementById('prog-label').textContent=`${d.done} of ${d.total} done`;
     document.getElementById('prog-pct').textContent=d.pct+'%';
   }catch(e){}
 },30000);
