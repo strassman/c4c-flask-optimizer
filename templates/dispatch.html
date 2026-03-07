@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Dispatch{% endblock %}
+{% block content %}
+
+{% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}" style="margin-bottom:16px">{{ msg }}</div>{% endif %}
+
+<h1>🚀 Dispatch</h1>
+<p class="subtitle">Choose a mission type, assign volunteers, and send them out</p>
+
+<form method="POST" id="dispatch-form">
+
+<!-- ── Mission Type ───────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title" style="margin-bottom:14px">Mission Type</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+    {% for dt in dispatch_types %}
+    <label class="dispatch-type-card" data-type="{{ dt.id }}">
+      <input type="radio" name="dispatch_type" value="{{ dt.id }}"
+             {% if loop.first %}checked{% endif %}
+             onchange="onTypeChange(this.value)" style="display:none">
+      <div class="dispatch-type-icon">{{ dt.icon }}</div>
+      <div class="dispatch-type-label">{{ dt.label }}</div>
+      <div class="dispatch-type-desc">{{ dt.desc }}</div>
+    </label>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Volunteers + Addresses ────────────────────────────────── -->
+<div class="grid2" style="margin-bottom:16px">
+
+  <div class="card" style="display:flex;flex-direction:column">
+    <div class="card-title">👥 Volunteers</div>
+    {% if not d.vols %}
+    <div class="alert alert-info" style="margin-top:10px">Add volunteers first.</div>
+    {% else %}
+    <input type="text" id="vol-search" placeholder="Filter volunteers…" oninput="filterVols(this.value)" style="margin:10px 0 8px">
+    <div id="vol-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
+    {% for v in d.vols %}
+    <label class="vol-item" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)"
+      data-lat="{{ v.lat or '' }}" data-lng="{{ v.lng or '' }}" data-name="{{ v.name }}">
+      <input type="checkbox" name="selected_vols" value="{{ v.id }}">
+      <span style="min-width:0">
+        <strong style="font-size:13px">{{ v.name }}</strong>
+        <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:var(--orange);font-weight:600"></span>
+        <br><span style="color:var(--text3);font-size:12px">{{ v.address }}</span>
+        {% if v.has_vehicle %}<span style="font-size:11px;color:var(--green);margin-left:4px">🚗</span>{% endif %}
+      </span>
+    </label>
+    {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Address panel — adapts per type -->
+  <div class="card" style="display:flex;flex-direction:column">
+    <div class="card-title" id="addr-panel-title">📍 Addresses</div>
+    {% if not d.addrs %}
+    <div class="alert alert-info" style="margin-top:10px">No pending addresses.</div>
+    {% else %}
+    <div style="display:flex;gap:8px;margin:10px 0 8px;align-items:center">
+      <input type="text" id="addr-search" placeholder="Filter…" oninput="filterAddrs(this.value)" style="flex:1;margin:0">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()">All</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
+    </div>
+    <div id="addr-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
+    {% for a in d.addrs %}
+    <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)">
+      <input type="checkbox" name="selected_addrs" value="{{ a.id }}" style="margin-top:3px;flex-shrink:0">
+      <span style="font-size:13px;min-width:0;flex:1">
+        {{ a.address }}
+        {% if a.first_name or a.last_name %}
+        <span style="color:var(--text3);font-size:12px"> · {{ a.first_name }} {{ a.last_name }}</span>
+        {% endif %}
+        {% if a.missing %}
+        <span style="font-size:11px;color:var(--orange);margin-left:4px">⚠️ Missing</span>
+        {% endif %}
+      </span>
+    </label>
+    {% endfor %}
+    </div>
+    <p style="color:var(--text3);font-size:12px;margin-top:8px" id="addr-count"></p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Options + Launch ──────────────────────────────────────── -->
+<div class="card">
+  <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
+
+    <div>
+      <div class="card-title" style="margin-bottom:10px">⚡ Routing Method</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:var(--text2);font-size:13px">
+          <input type="radio" name="urgency" value="today" checked> 🚗 Optimized — full TSP routing
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:var(--text2);font-size:13px">
+          <input type="radio" name="urgency" value="soon"> 📍 Proximity — nearest-first clusters
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span id="selection-summary" style="font-size:13px;color:var(--text3)"></span>
+      <button class="btn btn-primary btn-lg" type="button" id="dispatch-btn" onclick="submitDispatch()">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L12.5 9H20L14 13.5L16.5 20L10 15.5L3.5 20L6 13.5L0 9H7.5L10 2Z"/></svg>
+        <span id="dispatch-label">Launch Dispatch</span>
+        <span class="spinner" id="dispatch-spinner" style="display:none"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+</form>
+
+<style>
+.dispatch-type-card {
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:14px 10px;border-radius:var(--radius);border:2px solid var(--border);
+  cursor:pointer;transition:all .15s;background:var(--surface);user-select:none;
+}
+.dispatch-type-card:hover { border-color:var(--border2);background:var(--surface2) }
+.dispatch-type-card.selected { border-color:var(--accent);background:rgba(79,142,247,.1) }
+.dispatch-type-icon { font-size:26px;margin-bottom:6px }
+.dispatch-type-label { font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px }
+.dispatch-type-desc { font-size:11px;color:var(--text3);line-height:1.4 }
+</style>
+
+<script>
+const addrCoords = {{ addr_coords_json|safe }};
+
+const TYPE_CONFIG = {
+  sign_delivery: { addrTitle:'🪧 Sign Addresses',   addrFilter: a => true },
+  lit_drop:      { addrTitle:'📚 Drop Addresses',   addrFilter: a => true },
+  door_knock:    { addrTitle:'🚪 Canvass Addresses', addrFilter: a => true },
+  sign_recovery: { addrTitle:'🔄 Missing Signs',    addrFilter: a => a.dataset.missing==='True' },
+  gotv:          { addrTitle:'🗳️ GOTV Addresses',   addrFilter: a => true },
+  general:       { addrTitle:'📋 Stop Addresses',   addrFilter: a => true },
+};
+
+function onTypeChange(type){
+  document.querySelectorAll('.dispatch-type-card').forEach(c=>{
+    c.classList.toggle('selected', c.dataset.type===type);
+  });
+  const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.sign_delivery;
+  document.getElementById('addr-panel-title').textContent = cfg.addrTitle;
+  // For sign_recovery, auto-check missing sign addresses
+  if(type==='sign_recovery'){
+    document.querySelectorAll('.addr-item').forEach(item=>{
+      const cb = item.querySelector('input[type=checkbox]');
+      cb.checked = item.querySelector('[data-missing]') !== null || item.textContent.includes('⚠️');
+    });
+    updateSummary();
+  }
+}
+
+// Init first card as selected
+document.querySelectorAll('.dispatch-type-card')[0]?.classList.add('selected');
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+
+function sortVolsByProximity(){
+  const checkedIds=Array.from(document.querySelectorAll('input[name="selected_addrs"]:checked')).map(cb=>cb.value);
+  const selectedCoords=addrCoords.filter(a=>checkedIds.includes(String(a.id))&&a.lat);
+  const volList=document.getElementById('vol-list');
+  if(!volList||selectedCoords.length===0) return;
+  const items=Array.from(volList.querySelectorAll('.vol-item'));
+  items.forEach(item=>{
+    const lat=parseFloat(item.dataset.lat),lng=parseFloat(item.dataset.lng);
+    if(!lat||!lng){item.dataset.score=99999;return;}
+    const avg=selectedCoords.reduce((s,a)=>s+haversine(lat,lng,a.lat,a.lng),0)/selectedCoords.length;
+    item.dataset.score=avg;
+    const badge=item.querySelector('.prox-badge');
+    if(badge){badge.textContent=avg<1?`${(avg*1000).toFixed(0)}m`:`${avg.toFixed(1)}mi`;badge.style.display='inline';}
+  });
+  items.sort((a,b)=>parseFloat(a.dataset.score)-parseFloat(b.dataset.score));
+  items.forEach(item=>volList.appendChild(item));
+}
+
+function updateSummary(){
+  const vols=document.querySelectorAll('input[name="selected_vols"]:checked').length;
+  const stops=document.querySelectorAll('input[name="selected_addrs"]:checked').length;
+  document.getElementById('addr-count').textContent=stops+' selected';
+  const s=document.getElementById('selection-summary');
+  if(vols>0&&stops>0) s.textContent=`${vols} vol${vols!==1?'s':''}, ${stops} stop${stops!==1?'s':''}`;
+  else if(vols===0) s.textContent='Select at least one volunteer';
+  else s.textContent='Select at least one address';
+}
+
+function filterVols(q){q=q.toLowerCase();document.querySelectorAll('.vol-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});}
+function filterAddrs(q){q=q.toLowerCase();document.querySelectorAll('.addr-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});}
+function selectAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>{if(cb.closest('.addr-item').style.display!=='none')cb.checked=true;});updateSummary();sortVolsByProximity();}
+function clearAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>cb.checked=false);updateSummary();}
+
+document.querySelectorAll('input[name="selected_addrs"]').forEach(cb=>cb.addEventListener('change',()=>{updateSummary();sortVolsByProximity();}));
+document.querySelectorAll('input[name="selected_vols"]').forEach(cb=>cb.addEventListener('change',updateSummary));
+updateSummary();
+
+function submitDispatch(){
+  const vols=document.querySelectorAll('input[name="selected_vols"]:checked').length;
+  const stops=document.querySelectorAll('input[name="selected_addrs"]:checked').length;
+  if(vols===0){alert('Select at least one volunteer.');return;}
+  if(stops===0){alert('Select at least one address.');return;}
+  const urgency=document.querySelector('input[name="urgency"]:checked').value;
+  const action=urgency==='today'?'optimize':'proximity';
+  document.getElementById('dispatch-spinner').style.display='inline-block';
+  document.getElementById('dispatch-btn').disabled=true;
+  document.getElementById('dispatch-label').textContent='Dispatching…';
+  const inp=document.createElement('input');
+  inp.type='hidden';inp.name='action';inp.value=action;
+  document.getElementById('dispatch-form').appendChild(inp);
+  document.getElementById('dispatch-form').submit();
+}
+</script>
+{% endblock %}
