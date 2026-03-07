@@ -613,27 +613,34 @@ def delivery_run():
                             db().table("constituents").update({"lat":lat,"lng":lng}).eq("id",a["id"]).execute()
 
                 routes=[]
-                if action=="optimize":
-                    all_pts=[(v["lat"],v["lng"]) for v in sel_vols if v.get("lat")]+\
-                            [(a["lat"],a["lng"]) for a in sel_addrs if a.get("lat")]
-                    if len(all_pts)<2: msg="❌ Not enough geocoded addresses."
-                    else:
-                        fm=osrm_matrix([(x["lat"],x["lng"]) for x in sel_vols+sel_addrs if x.get("lat")])
-                        stop_indices=list(range(len(sel_vols),len(sel_vols)+len(sel_addrs)))
-                        chunks=[[] for _ in sel_vols]
-                        for i,si in enumerate(stop_indices): chunks[i%len(sel_vols)].append(si)
-                        for vi,v in enumerate(sel_vols):
-                            if not v.get("lat"): continue
-                            order,dist=solve_tsp(fm,vi,chunks[vi])
-                            stops=[sel_addrs[si-len(sel_vols)] for si in order]
-                            wps=[(v["lat"],v["lng"])]+[(s["lat"],s["lng"]) for s in stops if s.get("lat")]
-                            geom=osrm_route(wps) if len(wps)>1 else []
-                            routes.append({"volunteer":v,"stops":stops,"distance_miles":dist,"geometry":geom})
+                # Only work with geocoded points to avoid index misalignment
+                geo_vols=[v for v in sel_vols if v.get("lat") and v.get("lng")]
+                geo_addrs=[a for a in sel_addrs if a.get("lat") and a.get("lng")]
+                print(f"geocoded: {len(geo_vols)} vols, {len(geo_addrs)} addrs", flush=True)
+                if not geo_vols:
+                    msg="❌ No volunteers have coordinates. Ensure volunteer addresses are complete."
+                elif not geo_addrs:
+                    msg="❌ No stop addresses could be geocoded."
+                elif action=="optimize":
+                    # Matrix indices: 0..nv-1 = vols, nv..nv+na-1 = addrs
+                    all_geo = geo_vols + geo_addrs
+                    fm = osrm_matrix([(x["lat"],x["lng"]) for x in all_geo])
+                    nv = len(geo_vols)
+                    na = len(geo_addrs)
+                    stop_indices = list(range(nv, nv+na))
+                    chunks = [[] for _ in geo_vols]
+                    for i, si in enumerate(stop_indices):
+                        chunks[i % nv].append(si)
+                    for vi, v in enumerate(geo_vols):
+                        order, dist = solve_tsp(fm, vi, chunks[vi])
+                        stops = [geo_addrs[si-nv] for si in order]
+                        wps = [(v["lat"],v["lng"])] + [(s["lat"],s["lng"]) for s in stops]
+                        geom = osrm_route(wps) if len(wps) > 1 else []
+                        routes.append({"volunteer":v,"stops":stops,"distance_miles":dist,"geometry":geom})
                 else:
-                    used=set(); per_vol=max(1,len(sel_addrs)//len(sel_vols))
-                    for v in sel_vols:
-                        if not v.get("lat"): continue
-                        remaining=[a for a in sel_addrs if a["id"] not in used and a.get("lat")]
+                    used=set(); per_vol=max(1,len(geo_addrs)//len(geo_vols))
+                    for v in geo_vols:
+                        remaining=[a for a in geo_addrs if a["id"] not in used]
                         remaining.sort(key=lambda a:hav((v["lat"],v["lng"]),(a["lat"],a["lng"])))
                         stops=remaining[:per_vol]
                         for s in stops: used.add(s["id"])
