@@ -206,7 +206,22 @@ def upload_photo(campaign_id, run_stop_id, file_bytes, mime):
         print(f"upload_photo path={path} size={len(file_bytes)}", flush=True)
         db().storage.from_(SUPABASE_BUCKET).upload(path, file_bytes,
             {"content-type": mime, "cache-control": "3600", "upsert": "true"})
-        url = db().storage.from_(SUPABASE_BUCKET).get_public_url(path)
+        url_obj = db().storage.from_(SUPABASE_BUCKET).get_public_url(path)
+        # supabase-py v2 returns a string directly; v1 returns an object
+        if isinstance(url_obj, str):
+            url = url_obj
+        elif hasattr(url_obj, "public_url"):
+            url = url_obj.public_url
+        elif hasattr(url_obj, "url"):
+            url = url_obj.url
+        elif isinstance(url_obj, dict):
+            url = url_obj.get("publicUrl") or url_obj.get("public_url") or url_obj.get("url","")
+        else:
+            url = str(url_obj)
+        # Strip any Supabase object wrapper if it somehow ended up as repr
+        if url.startswith("<") or "object at 0x" in url:
+            print(f"upload_photo: bad url repr={url}", flush=True)
+            return ""
         print(f"upload_photo success url={url}", flush=True)
         return url
     except Exception as e:
@@ -657,6 +672,7 @@ def delivery_run():
                         n_vols=len([r for r in routes if r["stops"]])
                         n_stops=sum(len(r["stops"]) for r in routes)
                         dispatch_type=request.form.get("dispatch_type","sign_delivery")
+                        dispatch_notes=request.form.get("dispatch_notes","").strip()
                         routing_method=action  # optimize or proximity
                         auto_name=f"{datetime.now().strftime('%b %d')} · {n_vols} vol{'s' if n_vols!=1 else ''} · {n_stops} stop{'s' if n_stops!=1 else ''}"
                         print(f"inserting run: {run_id} name={auto_name} type={dispatch_type}", flush=True)
@@ -664,6 +680,7 @@ def delivery_run():
                             "id":run_id,"campaign_id":campaign_id,
                             "name":auto_name,"status":"active",
                             "run_type":dispatch_type,"total_stops":n_stops,"done_count":0,
+                            "notes":dispatch_notes or None,
                         }).execute()
                         for route in routes:
                             vol=route["volunteer"]
