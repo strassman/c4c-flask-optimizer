@@ -743,10 +743,53 @@ def map_page():
             for stop in route["stops"]:
                 coords=addr_map.get(stop["address"],{})
                 stop["lat"]=coords.get("lat"); stop["lng"]=coords.get("lng")
+    # Build safe serializable runs list for JS (includes routes+stops for map rendering)
+    addr_coord_map = {a["address"]:{"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs}
+    safe_runs = []
+    for r in runs:
+        safe_routes = []
+        for route in r.get("routes", []):
+            vol = route.get("volunteer") or {}
+            safe_stops = []
+            for s in route.get("stops", []):
+                coords = addr_coord_map.get(s.get("address",""), {})
+                safe_stops.append({
+                    "id":           s.get("id",""),
+                    "address":      s.get("address",""),
+                    "status":       s.get("status","pending"),
+                    "volunteer_name": s.get("volunteer_name",""),
+                    "contact":      s.get("contact",""),
+                    "phone":        s.get("phone",""),
+                    "photo_url":    s.get("photo_url"),
+                    "lat":          coords.get("lat"),
+                    "lng":          coords.get("lng"),
+                })
+            safe_routes.append({
+                "volunteer": {
+                    "name":    vol.get("name",""),
+                    "address": vol.get("address",""),
+                    "lat":     vol.get("lat"),
+                    "lng":     vol.get("lng"),
+                },
+                "stops":    safe_stops,
+                "geometry": route.get("geometry",[]),
+            })
+        delivered_ids = {s["id"] for route in r.get("routes",[]) for s in route.get("stops",[]) if s.get("status")=="delivered"}
+        safe_runs.append({
+            "id":          r["id"],
+            "name":        r["name"],
+            "status":      r["status"],
+            "total_stops": r["total_stops"],
+            "done_count":  r["done_count"],
+            "vol_names":   r["vol_names"],
+            "done_keys":   list(delivered_ids),
+            "routes":      safe_routes,
+        })
     return render_template("map.html",
                            d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id},
                            active_run=safe_active_run,
-                           runs=runs)
+                           runs=safe_runs,
+                           HEX_COLORS=HEX_COLORS)
 
 @app.route("/map/select/<run_id>")
 @login_required
