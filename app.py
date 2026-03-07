@@ -90,6 +90,24 @@ HEX_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#c0392b","#5f9e
 def db(): return create_client(SUPABASE_URL, SUPABASE_KEY)
 def cid(): return session.get("cid")
 
+def rows(result):
+    """Extract plain-dict rows from a Supabase execute() result, safe for tojson."""
+    try:
+        data = result.data or []
+        return [dict(r) for r in data]
+    except:
+        return []
+
+def sanitize(obj):
+    """Recursively convert Supabase objects to plain dicts/lists for JSON serialization."""
+    if obj is None: return None
+    if isinstance(obj, dict): return {k: sanitize(v) for k,v in obj.items()}
+    if isinstance(obj, list): return [sanitize(i) for i in obj]
+    if isinstance(obj, (str, int, float, bool)): return obj
+    # Convert any unknown type (like Supabase model objects) to string or None
+    try: return str(obj)
+    except: return None
+
 # ── Auth decorator ─────────────────────────────────────────────────────────────
 def login_required(f):
     @wraps(f)
@@ -387,7 +405,7 @@ def volunteers():
 
         return redirect(url_for("volunteers"))
 
-    vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or []
+    vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
     return render_template("volunteers.html", d={"vols":vols,"cname":cname,"cid":campaign_id}, msg=msg)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -515,7 +533,7 @@ def constituents():
 
         return redirect(url_for("constituents"))
 
-    addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).order("created_at").execute().data or []
+    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).order("created_at").execute().data or [])
     return render_template("constituents.html", d={"addrs":addrs,"cname":cname,"cid":campaign_id}, msg=msg)
 
 @app.route("/constituents/flag_missing", methods=["POST"])
@@ -540,7 +558,7 @@ def unflag_missing():
 @login_required
 def export_csv():
     campaign_id=cid()
-    addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or []
+    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
     output=io.StringIO()
     fields=["status","address","contact","first_name","last_name","phone","email",
             "party","support_score","precinct","voter_id","note","delivered_date","delivered_by","tags"]
@@ -559,8 +577,8 @@ def export_csv():
 @login_required
 def delivery_run():
     campaign_id=cid(); cname=session.get("cname","Campaign"); msg=None
-    vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or []
-    addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").order("address").execute().data or []
+    vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
+    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").order("address").execute().data or [])
 
     if request.method == "POST":
         action=request.form.get("action")
@@ -690,7 +708,7 @@ def _build_map_routes(run_id):
 def map_page():
     campaign_id=cid(); cname=session.get("cname","Campaign")
     active_run_id=session.get("active_run_id")
-    addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or []
+    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
     runs_raw=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
     runs=[]
     for run in runs_raw:
@@ -821,10 +839,10 @@ def routes_page():
             db().table("run_stops").update({"status":"pending","delivered_at":None}).eq("id",stop_id).execute()
         return redirect(url_for("routes_page"))
 
-    runs=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
+    runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
     for run in runs:
-        stops=db().table("run_stops").select("*").eq("run_id",run["id"]).order("volunteer_name,stop_order").execute().data or []
-        tokens=db().table("vol_tokens").select("*").eq("run_id",run["id"]).execute().data or []
+        stops=sanitize(db().table("run_stops").select("*").eq("run_id",run["id"]).order("volunteer_name,stop_order").execute().data or [])
+        tokens=sanitize(db().table("vol_tokens").select("*").eq("run_id",run["id"]).execute().data or [])
         run["stops"]=stops; run["total_stops"]=len(stops)
         run["done_count"]=sum(1 for s in stops if s["status"]=="delivered")
         run["vol_names"]=list({s["volunteer_name"] for s in stops})
@@ -929,10 +947,10 @@ def vol_deliver_progress(run_id, vol_token):
 def analytics():
     from collections import defaultdict
     campaign_id=cid(); cname=session.get("cname","Campaign")
-    all_csts=db().table("constituents").select("id,status,party,support_score,sign_requested,donor,volunteer_interest,delivered_date,delivered_by").eq("campaign_id",campaign_id).execute().data or []
-    all_runs=db().table("runs").select("*").eq("campaign_id",campaign_id).execute().data or []
-    all_stops=db().table("run_stops").select("id,status,volunteer_name,delivered_at,photo_url").eq("campaign_id",campaign_id).execute().data or []
-    all_photos=db().table("sign_photos").select("id,volunteer_name,taken_at").eq("campaign_id",campaign_id).execute().data or []
+    all_csts=sanitize(db().table("constituents").select("id,status,party,support_score,sign_requested,donor,volunteer_interest,delivered_date,delivered_by").eq("campaign_id",campaign_id).execute().data or [])
+    all_runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).execute().data or [])
+    all_stops=sanitize(db().table("run_stops").select("id,status,volunteer_name,delivered_at,photo_url").eq("campaign_id",campaign_id).execute().data or [])
+    all_photos=sanitize(db().table("sign_photos").select("id,volunteer_name,taken_at").eq("campaign_id",campaign_id).execute().data or [])
 
     total_csts=len(all_csts); total_placed=sum(1 for a in all_csts if a["status"]=="delivered")
     pct_complete=round(total_placed/total_csts*100) if total_csts else 0
@@ -998,12 +1016,12 @@ def outreach():
         active_run_id=runs[0]["id"] if runs else None
     emails=[]
     if active_run_id:
-        tokens=db().table("vol_tokens").select("*").eq("run_id",active_run_id).execute().data or []
+        tokens=sanitize(db().table("vol_tokens").select("*").eq("run_id",active_run_id).execute().data or [])
         for tok in tokens:
             stops=db().table("run_stops").select("*")\
                       .eq("run_id",active_run_id).eq("volunteer_name",tok["volunteer_name"])\
                       .order("stop_order").execute().data or []
-            vr=db().table("volunteers").select("*").eq("id",tok.get("volunteer_id","")).execute().data
+            vr=sanitize(db().table("volunteers").select("*").eq("id",tok.get("volunteer_id","")).execute().data or [])
             vol=vr[0] if vr else {"name":tok["volunteer_name"],"email":"","phone":"","address":""}
             body="\n".join([f"Hi {vol['name']},",f"\nThank you for volunteering for {cname}!",
                             f"\nYou have {len(stops)} stop{'s' if len(stops)!=1 else ''}:\n"]+
@@ -1035,7 +1053,7 @@ def routes_search():
     results={"vols":[],"addrs":[]}
     if q:
         vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).execute().data or []
-        addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or []
+        addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
         results["vols"]=[v for v in vols if q in json.dumps(v).lower()]
         results["addrs"]=[a for a in addrs if q in json.dumps(a).lower()]
     return render_template("routes_search.html",d={"cname":cname,"cid":campaign_id},q=q,results=results)
