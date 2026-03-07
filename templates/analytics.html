@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<h1>📊 Analytics</h1>
+<p class="subtitle">Campaign performance overview</p>
+
+<!-- Top stats -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px">
+  {% for stat in [
+    ("🪧", "Total Signs", d.total_csts),
+    ("✅", "Placed", d.total_placed),
+    ("⏳", "Pending", d.total_pending),
+    ("📸", "Photos Taken", d.total_photos),
+    ("🏃", "Runs", d.total_runs),
+    ("🙋", "Sign Requests", d.sign_requests),
+  ] %}
+  <div class="card" style="text-align:center;padding:16px 12px">
+    <div style="font-size:24px;margin-bottom:4px">{{ stat[0] }}</div>
+    <div style="font-size:22px;font-weight:700;color:var(--text)">{{ stat[2] }}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px">{{ stat[1] }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Progress bar -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div style="font-weight:600">Overall Progress</div>
+    <div style="font-size:20px;font-weight:700;color:var(--green)">{{ d.pct_complete }}%</div>
+  </div>
+  <div style="height:12px;background:var(--surface2);border-radius:6px;overflow:hidden">
+    <div style="height:100%;width:{{ d.pct_complete }}%;background:var(--green);border-radius:6px;transition:width .5s"></div>
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin-top:6px">{{ d.total_placed }} of {{ d.total_csts }} signs placed</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+  <!-- Signs placed per day -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">📅 Signs Placed — Last 14 Days</div>
+    {% set max_count = d.days_data|map(attribute='count')|max if d.days_data else 1 %}
+    {% set max_count = max_count if max_count > 0 else 1 %}
+    <div style="display:flex;align-items:flex-end;gap:3px;height:80px">
+      {% for day in d.days_data %}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:{{ (day.count / max_count * 70)|int }}px;min-height:{{ '3' if day.count > 0 else '0' }}px" title="{{ day.date }}: {{ day.count }}"></div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:9px;color:var(--text3)">
+      <span>{{ d.days_data[0].date if d.days_data else '' }}</span>
+      <span>{{ d.days_data[-1].date if d.days_data else '' }}</span>
+    </div>
+    {% if d.days_data %}
+    <div style="font-size:11px;color:var(--text2);margin-top:8px">
+      Total this period: <strong>{{ d.days_data|map(attribute='count')|sum }}</strong>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Volunteer leaderboard -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">🏆 Volunteer Leaderboard</div>
+    {% if d.leaderboard %}
+    {% for vol in d.leaderboard[:8] %}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text3);width:16px">{{ loop.index }}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ vol.name }}</div>
+        <div style="font-size:11px;color:var(--text3)">{{ vol.placed }} placed{% if vol.photos %} · {{ vol.photos }} 📸{% endif %}</div>
+      </div>
+      {% if d.leaderboard[0].placed > 0 %}
+      <div style="width:60px;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:{{ (vol.placed / d.leaderboard[0].placed * 100)|int }}%;background:var(--green);border-radius:3px"></div>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="color:var(--text3);font-size:13px">No delivery data yet.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+
+  <!-- Party breakdown -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">🗳️ Party Breakdown</div>
+    {% set party_colors = {"D":"#3498db","R":"#e74c3c","I":"#2ecc71","Unknown":"#535a6b"} %}
+    {% for party, count in d.party_counts.items()|sort(attribute='1', reverse=True) %}
+    {% set pct = (count / d.total_csts * 100)|round|int if d.total_csts else 0 %}
+    <div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="font-weight:600">{{ party }}</span>
+        <span style="color:var(--text3)">{{ count }} ({{ pct }}%)</span>
+      </div>
+      <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:{{ pct }}%;background:{{ party_colors.get(party, '#535a6b') }};border-radius:3px"></div>
+      </div>
+    </div>
+    {% else %}
+    <div style="color:var(--text3);font-size:13px">No party data yet.</div>
+    {% endfor %}
+  </div>
+
+  <!-- Support score -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">❤️ Support Score Distribution</div>
+    {% set score_colors = {"1":"#e74c3c","2":"#e67e22","3":"#f1c40f","4":"#2ecc71","5":"#3498db"} %}
+    {% set score_labels = {"1":"Strong Oppose","2":"Lean Oppose","3":"Undecided","4":"Lean Support","5":"Strong Support"} %}
+    {% for score in ["5","4","3","2","1"] %}
+    {% set count = d.score_counts.get(score, 0) %}
+    {% set scored_total = d.score_counts.values()|sum %}
+    {% set pct = (count / scored_total * 100)|round|int if scored_total else 0 %}
+    <div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="font-weight:600">{{ score }} — {{ score_labels[score] }}</span>
+        <span style="color:var(--text3)">{{ count }}</span>
+      </div>
+      <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:{{ pct }}%;background:{{ score_colors[score] }};border-radius:3px"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% if not d.score_counts %}
+    <div style="color:var(--text3);font-size:13px">No support score data yet.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- Run completion -->
+<div class="card">
+  <div class="card-title" style="margin-bottom:14px">🏃 Run Completion</div>
+  {% if d.run_stats %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+          <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--border)">Run</th>
+          <th style="text-align:center;padding:6px 8px;border-bottom:1px solid var(--border)">Placed</th>
+          <th style="text-align:center;padding:6px 8px;border-bottom:1px solid var(--border)">Total</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);width:40%">Progress</th>
+          <th style="text-align:center;padding:6px 0;border-bottom:1px solid var(--border)">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in d.run_stats %}
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px 0;font-weight:500">{{ r.name }}</td>
+          <td style="text-align:center;padding:8px;color:var(--green);font-weight:600">{{ r.done }}</td>
+          <td style="text-align:center;padding:8px;color:var(--text3)">{{ r.total }}</td>
+          <td style="padding:8px">
+            <div style="height:6px;background:var(--surface2);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:{{ r.pct }}%;background:{{ 'var(--green)' if r.pct==100 else 'var(--accent)' }};border-radius:3px"></div>
+            </div>
+          </td>
+          <td style="text-align:center;padding:8px">
+            <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:{{ 'rgba(52,199,89,.15)' if r.status=='complete' else 'rgba(79,142,247,.15)' }};color:{{ 'var(--green)' if r.status=='complete' else 'var(--accent)' }}">
+              {{ '✅ Done' if r.status=='complete' else '🏃 Active' }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="color:var(--text3);font-size:13px">No runs yet. Create a delivery run to see stats here.</div>
+  {% endif %}
+</div>
+
+{% endblock %}
