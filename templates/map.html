@@ -166,9 +166,11 @@
   position: absolute; bottom: 16px; left: 16px; z-index: 400;
   background: rgba(8,10,15,0.92); backdrop-filter: blur(12px);
   border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; max-width: 200px;
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;
+  max-width: 240px; max-height: 300px; overflow-y: auto;
 }
-.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); min-width: 0; }
+.legend-row span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 </style>
 {% endblock %}
@@ -422,23 +424,36 @@ function renderMap(view){
   let legend='';
 
   if(view==='routes' && activeRun){
-    const doneSet=new Set(activeRun.done_keys||[]);
+    const doneIds=new Set(activeRun.done_keys||[]);
     activeRun.routes.forEach((r,ri)=>{
-      const vol=r.volunteer,hex=r.hex||HEX_COLORS[ri%HEX_COLORS.length];
+      const vol=r.volunteer,hex=HEX_COLORS[ri%HEX_COLORS.length];
       if(!vol.lat) return;
       bounds.push([vol.lat,vol.lng]);
-      addLayer(L.marker([vol.lat,vol.lng],{icon:volIcon(hex)}).bindPopup(`<b>🏠 ${vol.name}</b><br><small>${vol.address}</small>`));
-      if(r.road_geometry?.length) addLayer(L.polyline(r.road_geometry,{color:hex,weight:4,opacity:.75}));
+      addLayer(L.marker([vol.lat,vol.lng],{icon:volIcon(hex)}).bindPopup(`<b>🏠 ${vol.name}</b><br><small>${vol.address||''}</small>`));
+      // Draw route line: use OSRM geometry if available, else straight lines vol→stops
+      const stopCoords=r.stops.filter(s=>s.lat&&s.lng).map(s=>[s.lat,s.lng]);
+      if(r.geometry&&r.geometry.length>1){
+        addLayer(L.polyline(r.geometry,{color:hex,weight:4,opacity:.7}));
+      } else if(stopCoords.length){
+        const linePts=[[vol.lat,vol.lng],...stopCoords];
+        addLayer(L.polyline(linePts,{color:hex,weight:3,opacity:.6,dashArray:'6,4'}));
+      }
+      let doneCt=0;
       r.stops.forEach((s,i)=>{
-        if(!s.lat) return;
+        if(!s.lat||!s.lng) return;
         bounds.push([s.lat,s.lng]);
-        const key=vol.name+'_'+i, done=doneSet.has(key);
-        const contact=s.contact?`<br>👤 ${s.contact}`:'', phone=s.phone?`<br>📞 ${s.phone}`:'', note=s.note?`<br>📝 ${s.note}`:'';
-        const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address)}/${encodeURIComponent(s.address)}`;
-        addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,done)}).bindPopup(`<b>Stop ${i+1}${done?' ✅':''}</b><br>${s.address}${contact}${phone}${note}<br><b style="color:${hex}">${vol.name}</b><br><a href="${dir}" target="_blank">📍 Directions</a>`,{maxWidth:240}));
+        const isDone=s.status==='delivered'||doneIds.has(s.id);
+        if(isDone) doneCt++;
+        const contact=s.contact?`<br>👤 ${s.contact}`:'';
+        const phone=s.phone?`<br>📞 ${s.phone}`:'';
+        const photo=s.photo_url?`<br><img src="${s.photo_url}" style="width:100%;max-width:200px;border-radius:6px;margin-top:6px">` :'';
+        const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address||'')}/${encodeURIComponent(s.address)}`;
+        addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,isDone)}).bindPopup(
+          `<b>Stop ${i+1}${isDone?' ✅':''}</b><br>${s.address}${contact}${phone}<br><b style="color:${hex}">${vol.name}</b><br><a href="${dir}" target="_blank">📍 Directions</a>${photo}`,
+          {maxWidth:260}));
       });
-      const total=r.stops.length, done=r.stops.filter((_,i)=>doneSet.has(vol.name+'_'+i)).length;
-      legend+=`<div class="legend-row"><span class="legend-dot" style="background:${hex}"></span><span>${vol.name} · ${done}/${total}</span></div>`;
+      const total=r.stops.length;
+      legend+=`<div class="legend-row"><span class="legend-dot" style="background:${hex}"></span><span>${vol.name} · ${doneCt}/${total} done</span></div>`;
     });
     if(!legend) legend='<div class="legend-row" style="color:var(--text3)">Select a run to view routes</div>';
 
@@ -446,17 +461,16 @@ function renderMap(view){
     // All pending stops across ALL active runs, deduplicated by address
     const seen=new Set();
     allRuns.filter(r=>r.status==='active').forEach((run,ri)=>{
-      const doneSet=new Set(run.done_keys||[]);
+      const doneIds=new Set(run.done_keys||[]);
       run.routes.forEach((r,rj)=>{
-        const vol=r.volunteer, hex=r.hex||HEX_COLORS[rj%HEX_COLORS.length];
+        const vol=r.volunteer, hex=HEX_COLORS[rj%HEX_COLORS.length];
         if(!vol.lat) return;
         r.stops.forEach((s,i)=>{
-          if(!s.lat||seen.has(s.address)) return;
-          const key=vol.name+'_'+i;
-          if(doneSet.has(key)) return;
+          if(!s.lat||!s.lng||seen.has(s.address)) return;
+          if(s.status==='delivered'||doneIds.has(s.id)) return;
           seen.add(s.address); bounds.push([s.lat,s.lng]);
           const contact=s.contact?`<br>👤 ${s.contact}`:'', phone=s.phone?`<br>📞 ${s.phone}`:'';
-          const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address)}/${encodeURIComponent(s.address)}`;
+          const dir=`https://www.google.com/maps/dir/${encodeURIComponent(vol.address||'')}/${encodeURIComponent(s.address)}`;
           addLayer(L.marker([s.lat,s.lng],{icon:numIcon(hex,i+1,false)}).bindPopup(`<b>⏳ Stop ${i+1}</b><br>${s.address}${contact}${phone}<br><b style="color:${hex}">${vol.name}</b> · ${run.name}<br><a href="${dir}" target="_blank">📍 Directions</a>`,{maxWidth:240}));
         });
       });
