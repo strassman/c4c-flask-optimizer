@@ -175,6 +175,11 @@
           {{ run.routes|length }} volunteer{% if run.routes|length!=1 %}s{% endif %} ·
           {{ run.total_stops }} stops
         </div>
+        {% if run.notes %}
+        <div style="margin-top:8px;font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 12px;border-left:3px solid var(--accent)">
+          📝 {{ run.notes }}
+        </div>
+        {% endif %}
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <a href="/map/select/{{ run.id }}" class="btn btn-primary btn-sm">🗺 Map</a>
