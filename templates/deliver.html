@@ -185,26 +185,73 @@ function openCamera(idx){
 function submitPhoto(idx){
   const file=document.getElementById('cam-'+idx).files[0];
   if(!file) return;
-
-  // Show uploading spinner immediately
   const card=document.getElementById('card-'+idx);
-  document.getElementById('upload-wrap-'+idx).style.display='';
-  document.getElementById('actions-'+idx).style.display='none';
-  card.querySelectorAll('button').forEach(b=>b.disabled=true);
 
-  // Also show a preview of the image while uploading
+  // Read and show preview — don't submit yet
   const reader=new FileReader();
   reader.onload=e=>{
-    const uploadWrap=document.getElementById('upload-wrap-'+idx);
-    uploadWrap.innerHTML=`
-      <img src="${e.target.result}" style="width:100%;max-height:200px;object-fit:cover;display:block;opacity:.6">
-      <div class="uploading-overlay">
-        <div class="spinner"></div>
-        <span>Uploading…</span>
+    // Hide current actions
+    document.getElementById('actions-'+idx).style.display='none';
+
+    // Show preview in upload-wrap with confirm/retake buttons
+    const wrap=document.getElementById('upload-wrap-'+idx);
+    wrap.style.display='';
+    wrap.innerHTML=`
+      <img src="${e.target.result}" style="width:100%;max-height:260px;object-fit:cover;display:block">
+      <div class="photo-overlay">
+        <div class="photo-badge">📸 Preview — does this look good?</div>
       </div>`;
-    document.getElementById('photo-form-'+idx).submit();
+
+    // Insert confirm row below the preview
+    let confirmRow=document.getElementById('confirm-row-'+idx);
+    if(!confirmRow){
+      confirmRow=document.createElement('div');
+      confirmRow.id='confirm-row-'+idx;
+      confirmRow.style.cssText='display:flex;gap:8px;padding:10px 16px 14px';
+      wrap.insertAdjacentElement('afterend', confirmRow);
+    }
+    confirmRow.innerHTML=`
+      <button class="btn btn-done" style="flex:2" onclick="confirmPhoto(${idx})">
+        ✅ Looks good — mark placed
+      </button>
+      <button class="btn btn-photo" style="flex:1" onclick="retakePhoto(${idx})">
+        🔄 Retake
+      </button>`;
   };
   reader.readAsDataURL(file);
+}
+
+function confirmPhoto(idx){
+  const card=document.getElementById('card-'+idx);
+  const confirmRow=document.getElementById('confirm-row-'+idx);
+  const wrap=document.getElementById('upload-wrap-'+idx);
+
+  // Swap confirm buttons for uploading spinner
+  if(confirmRow) confirmRow.remove();
+  wrap.innerHTML=`
+    <img src="${wrap.querySelector('img').src}" style="width:100%;max-height:260px;object-fit:cover;display:block;opacity:.5">
+    <div class="uploading-overlay">
+      <div class="spinner"></div>
+      <span>Uploading…</span>
+    </div>`;
+
+  document.getElementById('photo-form-'+idx).submit();
+}
+
+function retakePhoto(idx){
+  // Reset — hide preview, remove confirm row, show actions, re-open camera
+  document.getElementById('upload-wrap-'+idx).style.display='none';
+  document.getElementById('upload-wrap-'+idx).innerHTML='';
+  const confirmRow=document.getElementById('confirm-row-'+idx);
+  if(confirmRow) confirmRow.remove();
+  document.getElementById('actions-'+idx).style.display='';
+
+  // Clear the file input so onchange fires again
+  const cam=document.getElementById('cam-'+idx);
+  cam.value='';
+
+  // Re-open camera
+  openCamera(idx);
 }
 
 // Poll progress every 30s
