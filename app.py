@@ -662,16 +662,23 @@ def delivery_run():
 # MAP
 # ══════════════════════════════════════════════════════════════════════════════
 def _build_map_routes(run_id):
-    stops=db().table("run_stops").select("*").eq("run_id",run_id).order("volunteer_name,stop_order").execute().data or []
+    try:
+        stops=db().table("run_stops").select("*").eq("run_id",run_id).order("volunteer_name,stop_order").execute().data or []
+    except: return []
     by_vol={}
     for s in stops:
-        vn=s["volunteer_name"]
+        vn=s.get("volunteer_name") or "Unknown"
         if vn not in by_vol: by_vol[vn]=[]
         by_vol[vn].append(s)
     routes=[]
     for vn,vol_stops in by_vol.items():
-        vr=db().table("volunteers").select("*").eq("id",vol_stops[0].get("volunteer_id","")).execute().data
-        vol=vr[0] if vr else {"name":vn,"address":"","lat":None,"lng":None}
+        vol={"name":vn,"address":"","lat":None,"lng":None}
+        vid=vol_stops[0].get("volunteer_id","")
+        if vid:
+            try:
+                vr=db().table("volunteers").select("*").eq("id",vid).execute().data
+                if vr: vol=vr[0]
+            except: pass
         geom=[]
         try: geom=json.loads(vol_stops[0].get("route_geometry") or "[]")
         except: pass
@@ -684,16 +691,62 @@ def map_page():
     campaign_id=cid(); cname=session.get("cname","Campaign")
     active_run_id=session.get("active_run_id")
     addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or []
-    runs=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
-    for run in runs:
+    runs_raw=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
+    runs=[]
+    for run in runs_raw:
         stops=db().table("run_stops").select("id,status,volunteer_name").eq("run_id",run["id"]).execute().data or []
-        run["total_stops"]=len(stops); run["done_count"]=sum(1 for s in stops if s["status"]=="delivered")
-        run["vol_names"]=list({s["volunteer_name"] for s in stops})
+        run["total_stops"]=len(stops)
+        run["done_count"]=sum(1 for s in stops if s["status"]=="delivered")
+        run["vol_names"]=list({s["volunteer_name"] for s in stops if s.get("volunteer_name")})
         run["routes"]=_build_map_routes(run["id"])
-    active_run=next((r for r in runs if r["id"]==active_run_id),runs[0] if runs else None)
+        runs.append(run)
+    active_run=next((r for r in runs if r["id"]==active_run_id), runs[0] if runs else None)
+    # Safe JSON-serializable version of active_run for JS
+    safe_active_run=None
+    if active_run:
+        safe_active_run={
+            "id": active_run["id"],
+            "name": active_run["name"],
+            "status": active_run["status"],
+            "total_stops": active_run["total_stops"],
+            "done_count": active_run["done_count"],
+            "vol_names": active_run["vol_names"],
+            "routes": [
+                {
+                    "volunteer": {
+                        "name": r["volunteer"].get("name",""),
+                        "address": r["volunteer"].get("address",""),
+                        "lat": r["volunteer"].get("lat"),
+                        "lng": r["volunteer"].get("lng"),
+                    },
+                    "stops": [
+                        {
+                            "id": s.get("id",""),
+                            "address": s.get("address",""),
+                            "status": s.get("status","pending"),
+                            "volunteer_name": s.get("volunteer_name",""),
+                            "photo_url": s.get("photo_url"),
+                            "photo_taken_at": s.get("photo_taken_at"),
+                            "lat": None, "lng": None,
+                        }
+                        for s in r["stops"]
+                    ],
+                    "geometry": r.get("geometry",[]),
+                }
+                for r in active_run.get("routes",[])
+            ],
+        }
+    # Enrich stop coordinates from constituents for map rendering
+    if safe_active_run:
+        addr_map={a["address"]:{"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs}
+        for route in safe_active_run["routes"]:
+            for stop in route["stops"]:
+                coords=addr_map.get(stop["address"],{})
+                stop["lat"]=coords.get("lat"); stop["lng"]=coords.get("lng")
     return render_template("map.html",
                            d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id},
-                           active_run=active_run)
+                           active_run=safe_active_run,
+                           runs=runs)
 
 @app.route("/map/select/<run_id>")
 @login_required
