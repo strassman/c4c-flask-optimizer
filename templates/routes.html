@@ -78,20 +78,30 @@
     <div id="run-list">
     {% for run in runs %}
     {% set pct = run.pct if run.pct is defined else 0 %}
-    <a href="/routes?run_id={{ run.id }}"
-       class="run-list-item {% if selected_run and run.id==selected_run.id %}active{% endif %} {% if run.status=='complete' %}complete{% endif %}"
-       data-search="{{ run.name|lower }} {{ (run.vol_names or [])|join(' ')|lower }}">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-        <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-          <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>{{ run.name }}
-        </span>
-        <span style="font-size:11px;color:var(--text3);white-space:nowrap">{{ pct }}%</span>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">
-        {{ run.timestamp[:16] if run.timestamp else '' }} · {{ run.type or 'optimized' }} · {{ run.total_stops or 0 }} stops
-      </div>
-      <div class="prog"><div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
-    </a>
+    <div class="run-list-item {% if selected_run and run.id==selected_run.id %}active{% endif %} {% if run.status=='complete' %}complete{% endif %}"
+       data-search="{{ run.name|lower }} {{ (run.vol_names or [])|join(' ')|lower }}"
+       style="position:relative">
+      <a href="/routes?run_id={{ run.id }}" style="display:block;text-decoration:none;color:inherit;padding-right:28px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+          <span style="font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <span class="run-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></span>{{ run.name }}
+          </span>
+          <span style="font-size:11px;color:var(--text3);white-space:nowrap">{{ pct }}%</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">
+          {{ run.timestamp[:16] if run.timestamp else '' }} · {{ run.type or 'optimized' }} · {{ run.total_stops or 0 }} stops
+        </div>
+        <div class="prog"><div class="prog-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
+      </a>
+      <form method="POST" onsubmit="return confirm('Delete this run?')"
+            style="position:absolute;top:10px;right:10px">
+        <input type="hidden" name="action" value="delete_run">
+        <input type="hidden" name="run_id" value="{{ run.id }}">
+        <button type="submit" title="Delete run"
+                style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px;line-height:1;border-radius:4px"
+                onmouseover="this.style.color='#ff453a'" onmouseout="this.style.color='var(--text3)'">✕</button>
+      </form>
+    </div>
     {% endfor %}
     </div>
   </div>
