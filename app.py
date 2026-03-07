@@ -881,15 +881,35 @@ def routes_page():
             db().table("run_stops").update({"status":"pending","delivered_at":None}).eq("id",stop_id).execute()
         return redirect(url_for("routes_page"))
 
-    runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
-    for run in runs:
+    runs_raw=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
+    print(f"[routes] campaign={campaign_id} runs_raw={len(runs_raw)}", flush=True)
+    selected_run_id=request.args.get("run_id")
+    runs=[]
+    for run in runs_raw:
         stops=sanitize(db().table("run_stops").select("*").eq("run_id",run["id"]).order("volunteer_name,stop_order").execute().data or [])
         tokens=sanitize(db().table("vol_tokens").select("*").eq("run_id",run["id"]).execute().data or [])
-        run["stops"]=stops; run["total_stops"]=len(stops)
-        run["done_count"]=sum(1 for s in stops if s["status"]=="delivered")
-        run["vol_names"]=list({s["volunteer_name"] for s in stops})
-        run["vol_tokens"]=tokens
-    return render_template("routes.html", d={"runs":runs,"cname":cname,"cid":campaign_id}, msg=msg)
+        done_count=sum(1 for s in stops if s["status"]=="delivered")
+        total=len(stops)
+        pct=round(done_count/total*100) if total else 0
+        # Build per-volunteer route groups
+        by_vol={}
+        for s in stops:
+            vn=s.get("volunteer_name","Unknown")
+            if vn not in by_vol: by_vol[vn]={"volunteer_name":vn,"stops":[],"distance_miles":s.get("distance_miles")}
+            by_vol[vn]["stops"].append(s)
+        route_groups=list(by_vol.values())
+        run.update({
+            "stops":stops,"total_stops":total,"done_count":done_count,"pct":pct,
+            "vol_names":list({s["volunteer_name"] for s in stops if s.get("volunteer_name")}),
+            "vol_tokens":tokens,"routes":route_groups,
+            "timestamp":run.get("created_at","")[:16].replace("T"," ") if run.get("created_at") else "",
+            "type":run.get("run_type","optimized"),
+            "done_keys":[s["id"] for s in stops if s["status"]=="delivered"],
+        })
+        runs.append(run)
+    selected_run=next((r for r in runs if r["id"]==selected_run_id),None)
+    return render_template("routes.html", d={"runs":runs,"cname":cname,"cid":campaign_id},
+                           runs=runs, selected_run=selected_run, msg=msg)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # VOLUNTEER DELIVERY PORTAL  (public)
