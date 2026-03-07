@@ -803,11 +803,23 @@ def map_page():
             "done_keys":   list(delivered_ids),
             "routes":      safe_routes,
         })
+    import json as _json
+
+    def _safe_dumps(obj):
+        """JSON serialize, replacing any non-serializable values with null."""
+        def default(o):
+            return None
+        return _json.dumps(obj, default=default)
+
     return render_template("map.html",
                            d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id},
                            active_run=safe_active_run,
                            runs=safe_runs,
-                           HEX_COLORS=HEX_COLORS)
+                           HEX_COLORS=HEX_COLORS,
+                           addrs_json=_safe_dumps(addrs),
+                           active_run_json=_safe_dumps(safe_active_run) if safe_active_run else "null",
+                           runs_json=_safe_dumps(safe_runs),
+                           hex_colors_json=_safe_dumps(HEX_COLORS))
 
 @app.route("/map/select/<run_id>")
 @login_required
