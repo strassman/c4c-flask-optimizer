@@ -20,7 +20,7 @@
     {% for v in d.vols %}
     <label class="vol-item" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)"
       data-lat="{{ v.lat if v.lat else '' }}" data-lng="{{ v.lng if v.lng else '' }}" data-name="{{ v.name }}">
-      <input type="checkbox" name="avail" value="{{ v.name }}" {% if v.name in avail %}checked{% endif %}>
+      <input type="checkbox" name="selected_vols" value="{{ v.id }}">
       <span style="min-width:0">
         <strong style="font-size:13px">{{ v.name }}</strong>
         <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:var(--orange);font-weight:600"></span>
@@ -45,45 +45,16 @@
     </div>
     <div id="addr-list" style="flex:1;overflow-y:auto;max-height:420px;padding-right:4px">
     {% for a in d.addrs %}
-    {% if a.status != 'delivered' %}
     <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)">
-      <input type="checkbox" name="run_ids" value="{{ a.id }}" {% if a.id in d.run_ids %}checked{% endif %} style="margin-top:2px;flex-shrink:0">
+      <input type="checkbox" name="selected_addrs" value="{{ a.id }}" style="margin-top:2px;flex-shrink:0">
       <span style="font-size:13px;min-width:0">{{ a.address }}{% if a.contact %} <span style="color:var(--text3)">· {{ a.contact }}</span>{% endif %}</span>
     </label>
-    {% endif %}
     {% endfor %}
     </div>
     <p style="color:var(--text3);font-size:12px;margin-top:8px" id="run-count"></p>
     {% endif %}
   </div>
 </div>
-
-<!-- Add new address -->
-<details style="margin-bottom:16px">
-  <summary>➕ Add new address not in system</summary>
-  <div class="detail-body">
-    <div style="background:#1a1d27;padding:16px;border-radius:8px">
-      <input type="hidden" name="action" value="add_address" id="add-addr-action" disabled>
-      <div class="grid2">
-        <div>
-          <label>Street *</label><input type="text" name="street" placeholder="123 Oak St">
-          <label>Contact</label><input type="text" name="contact">
-          <label>Phone</label><input type="text" name="phone">
-        </div>
-        <div>
-          <div class="grid3">
-            <div><label>City *</label><input type="text" name="city" placeholder="Baltimore"></div>
-            <div><label>State *</label><input type="text" name="state" placeholder="MD"></div>
-            <div><label>ZIP *</label><input type="text" name="zip" placeholder="21201"></div>
-          </div>
-          <label>Note</label><input type="text" name="note">
-        </div>
-      </div>
-      <br>
-      <button class="btn btn-primary" type="button" onclick="submitAddAddress()">Add to Run + Constituents</button>
-    </div>
-  </div>
-</details>
 
 <!-- Urgency + action buttons -->
 <div class="card">
@@ -96,106 +67,94 @@
       <input type="radio" name="urgency" value="soon"> 📅 Sometime soon — proximity clusters
     </label>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <button class="btn btn-secondary" type="submit" name="action" value="save_run">💾 Save Run</button>
-    <button class="btn btn-danger" type="submit" name="action" value="clear_run" onclick="return confirm('Clear run?')">🗑️ Clear Run</button>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-primary btn-lg" type="button" id="optimize-btn" onclick="submitOptimize()">
       <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2L12.5 9H20L14 13.5L16.5 20L10 15.5L3.5 20L6 13.5L0 9H7.5L10 2Z"/></svg>
       <span id="opt-label">Optimize Routes</span>
       <span class="spinner" id="opt-spinner" style="display:none"></span>
     </button>
+    <span id="selection-summary" style="font-size:13px;color:var(--text3)"></span>
   </div>
 </div>
 </form>
 
 <script>
-// Haversine distance in km
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371;
-  const dLat = (lat2-lat1)*Math.PI/180;
-  const dLng = (lng2-lng1)*Math.PI/180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
-  return R * 2 * Math.asin(Math.sqrt(a));
+const addrCoords = {{ addr_coords_json|safe }};
+
+function haversine(lat1,lng1,lat2,lng2){
+  const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
 }
 
-function sortVolsByProximity() {
-  // Collect lats/lngs of checked addresses
-  const checkedIds = Array.from(document.querySelectorAll('input[name="run_ids"]:checked')).map(cb => cb.value);
-  const addrData = {{ addr_coords|tojson }};
-  const selectedCoords = addrData.filter(a => checkedIds.includes(a.id) && a.lat);
-
-  const volList = document.getElementById('vol-list');
-  if (!volList || selectedCoords.length === 0) return;
-
-  const items = Array.from(volList.querySelectorAll('.vol-item'));
-  items.forEach(item => {
-    const lat = parseFloat(item.dataset.lat);
-    const lng = parseFloat(item.dataset.lng);
-    if (!lat || !lng) { item.dataset.score = 99999; return; }
-    // Average distance to all selected addresses
-    const avgDist = selectedCoords.reduce((sum, a) => sum + haversine(lat, lng, a.lat, a.lng), 0) / selectedCoords.length;
-    item.dataset.score = avgDist;
-    const badge = item.querySelector('.prox-badge');
-    if (badge) {
-      badge.textContent = avgDist < 1 ? `${(avgDist*1000).toFixed(0)}m away` : `${avgDist.toFixed(1)}mi away`;
-      badge.style.display = 'inline';
-    }
+function sortVolsByProximity(){
+  const checkedIds=Array.from(document.querySelectorAll('input[name="selected_addrs"]:checked')).map(cb=>cb.value);
+  const selectedCoords=addrCoords.filter(a=>checkedIds.includes(a.id)&&a.lat);
+  const volList=document.getElementById('vol-list');
+  if(!volList||selectedCoords.length===0) return;
+  const items=Array.from(volList.querySelectorAll('.vol-item'));
+  items.forEach(item=>{
+    const lat=parseFloat(item.dataset.lat),lng=parseFloat(item.dataset.lng);
+    if(!lat||!lng){item.dataset.score=99999;return;}
+    const avgDist=selectedCoords.reduce((s,a)=>s+haversine(lat,lng,a.lat,a.lng),0)/selectedCoords.length;
+    item.dataset.score=avgDist;
+    const badge=item.querySelector('.prox-badge');
+    if(badge){badge.textContent=avgDist<1?`${(avgDist*1000).toFixed(0)}m`:`${avgDist.toFixed(1)}mi`;badge.style.display='inline';}
   });
-
-  // Sort by score
-  items.sort((a, b) => parseFloat(a.dataset.score) - parseFloat(b.dataset.score));
-  items.forEach(item => volList.appendChild(item));
+  items.sort((a,b)=>parseFloat(a.dataset.score)-parseFloat(b.dataset.score));
+  items.forEach(item=>volList.appendChild(item));
 }
 
-function filterVols(q) {
-  q = q.toLowerCase();
-  document.querySelectorAll('.vol-item').forEach(el => {
-    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
+function updateSummary(){
+  const vols=document.querySelectorAll('input[name="selected_vols"]:checked').length;
+  const stops=document.querySelectorAll('input[name="selected_addrs"]:checked').length;
+  document.getElementById('run-count').textContent=stops+' stop'+(stops!==1?'s':'')+' selected';
+  document.getElementById('selection-summary').textContent=
+    vols>0&&stops>0?`${vols} vol${vols!==1?'s':''}, ${stops} stop${stops!==1?'s':''} selected`:
+    vols===0?'Select at least one volunteer':'Select at least one address';
+}
+
+function filterVols(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('.vol-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});
+}
+function filterAddrs(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('.addr-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});
+}
+function selectAllAddrs(){
+  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>{
+    if(cb.closest('.addr-item').style.display!=='none') cb.checked=true;
   });
+  updateSummary(); sortVolsByProximity();
 }
-function filterAddrs(q) {
-  q = q.toLowerCase();
-  document.querySelectorAll('.addr-item').forEach(el => {
-    el.style.display = el.textContent.toLowerCase().includes(q) ? '' : 'none';
-  });
+function clearAllAddrs(){
+  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>cb.checked=false);
+  updateSummary();
 }
-function selectAllAddrs() {
-  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb => {
-    if (cb.closest('.addr-item').style.display !== 'none') cb.checked = true;
-  });
-  updateCount();
-}
-function clearAllAddrs() {
-  document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb => cb.checked = false);
-  updateCount();
-}
-function updateCount() {
-  const checked = document.querySelectorAll('input[name="run_ids"]:checked').length;
-  document.getElementById('run-count').textContent = checked + ' stop' + (checked !== 1 ? 's' : '') + ' selected';
-}
-document.querySelectorAll('input[name="run_ids"]').forEach(cb => {
-  cb.addEventListener('change', () => { updateCount(); sortVolsByProximity(); });
+
+document.querySelectorAll('input[name="selected_addrs"]').forEach(cb=>{
+  cb.addEventListener('change',()=>{updateSummary();sortVolsByProximity();});
 });
-// Run on load if addresses already selected
-sortVolsByProximity();
-updateCount();
+document.querySelectorAll('input[name="selected_vols"]').forEach(cb=>{
+  cb.addEventListener('change',updateSummary);
+});
 
-function submitOptimize() {
-  const urgency = document.querySelector('input[name="urgency"]:checked').value;
-  const action  = urgency === 'today' ? 'optimize' : 'proximity';
-  document.getElementById('opt-spinner').style.display = 'inline-block';
-  document.getElementById('optimize-btn').disabled = true;
-  document.getElementById('opt-label').textContent = urgency === 'today' ? 'Optimizing...' : 'Clustering...';
+updateSummary();
 
-  // Create a hidden input for action
-  const inp = document.createElement('input');
-  inp.type = 'hidden'; inp.name = 'action'; inp.value = action;
+function submitOptimize(){
+  const vols=document.querySelectorAll('input[name="selected_vols"]:checked').length;
+  const stops=document.querySelectorAll('input[name="selected_addrs"]:checked').length;
+  if(vols===0){alert('Select at least one volunteer.');return;}
+  if(stops===0){alert('Select at least one address.');return;}
+  const urgency=document.querySelector('input[name="urgency"]:checked').value;
+  const action=urgency==='today'?'optimize':'proximity';
+  document.getElementById('opt-spinner').style.display='inline-block';
+  document.getElementById('optimize-btn').disabled=true;
+  document.getElementById('opt-label').textContent=urgency==='today'?'Optimizing...':'Clustering...';
+  const inp=document.createElement('input');
+  inp.type='hidden';inp.name='action';inp.value=action;
   document.getElementById('run-form').appendChild(inp);
-  document.getElementById('run-form').submit();
-}
-function submitAddAddress() {
-  document.getElementById('add-addr-action').disabled = false;
-  document.getElementById('add-addr-action').value = 'add_address';
   document.getElementById('run-form').submit();
 }
 </script>
