@@ -573,7 +573,9 @@ def unflag_missing():
 @login_required
 def export_csv():
     campaign_id=cid()
-    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
+    # Only load minimal constituent data for stats — full data loaded via viewport API
+    addrs_raw = db().table("constituents")        .select("id,address,lat,lng,status,missing,first_name,last_name,photo_url")        .eq("campaign_id",campaign_id).execute().data or []
+    addrs = sanitize(addrs_raw)
     output=io.StringIO()
     fields=["status","address","contact","first_name","last_name","phone","email",
             "party","support_score","precinct","voter_id","note","delivered_date","delivered_by","tags"]
@@ -767,7 +769,9 @@ def _build_map_routes(run_id):
 def map_page():
     campaign_id=cid(); cname=session.get("cname","Campaign")
     active_run_id=session.get("active_run_id")
-    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
+    # Only load minimal constituent data for stats — full data loaded via viewport API
+    addrs_raw = db().table("constituents")        .select("id,address,lat,lng,status,missing,first_name,last_name,photo_url")        .eq("campaign_id",campaign_id).execute().data or []
+    addrs = sanitize(addrs_raw)
     runs_raw=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
     runs=[]
     for run in runs_raw:
@@ -1030,6 +1034,47 @@ def vol_deliver_progress(run_id, vol_token):
     total=len(stops); done=sum(1 for s in stops if s["status"]=="delivered")
     return jsonify({"done":done,"total":total,"pct":round(done/total*100) if total else 0})
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAP VIEWPORT API  — returns only constituents visible in current bounds
+# ══════════════════════════════════════════════════════════════════════════════
+@app.route("/api/constituents")
+@login_required
+def api_constituents():
+    campaign_id = cid()
+    try:
+        south = float(request.args.get("south", 0))
+        north = float(request.args.get("north", 0))
+        west  = float(request.args.get("west",  0))
+        east  = float(request.args.get("east",  0))
+        status_filter = request.args.get("status", "all")  # all | pending | delivered
+    except ValueError:
+        return jsonify([])
+
+    try:
+        q = db().table("constituents")            .select("id,address,lat,lng,status,missing,first_name,last_name,party,precinct,support_score,photo_url")            .eq("campaign_id", campaign_id)            .gte("lat", south).lte("lat", north)            .gte("lng", west).lte("lng", east)
+        if status_filter != "all":
+            q = q.eq("status", status_filter)
+        rows = sanitize(q.limit(2000).execute().data or [])
+        return jsonify(rows)
+    except Exception as e:
+        print(f"api_constituents error: {e}", flush=True)
+        return jsonify([])
+
+@app.route("/api/constituents/stats")
+@login_required
+def api_constituent_stats():
+    campaign_id = cid()
+    try:
+        all_rows = db().table("constituents")            .select("id,status,missing")            .eq("campaign_id", campaign_id).execute().data or []
+        total    = len(all_rows)
+        placed   = sum(1 for r in all_rows if r.get("status") == "delivered")
+        pending  = total - placed
+        missing  = sum(1 for r in all_rows if r.get("missing"))
+        return jsonify({"total": total, "placed": placed, "pending": pending, "missing": missing})
+    except Exception as e:
+        return jsonify({"total":0,"placed":0,"pending":0,"missing":0})
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ANALYTICS
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1144,7 +1189,8 @@ def routes_search():
     results={"vols":[],"addrs":[]}
     if q:
         vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).execute().data or []
-        addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).execute().data or [])
+        addrs_raw=db().table("constituents").select("id,address,lat,lng,status,missing,first_name,last_name,photo_url").eq("campaign_id",campaign_id).execute().data or []
+        addrs=sanitize(addrs_raw)
         results["vols"]=[v for v in vols if q in json.dumps(v).lower()]
         results["addrs"]=[a for a in addrs if q in json.dumps(a).lower()]
     return render_template("routes_search.html",d={"cname":cname,"cid":campaign_id},q=q,results=results)
