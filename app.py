@@ -693,9 +693,11 @@ def delivery_run():
             lat,lng=geocode(v["address"])
             if lat: v["lat"]=lat; v["lng"]=lng
     addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
+    import json as _json
     return render_template("delivery_run.html",
                            d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},
-                           msg=msg, addr_coords=addr_coords)
+                           msg=msg,
+                           addr_coords_json=_json.dumps(addr_coords))
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAP
