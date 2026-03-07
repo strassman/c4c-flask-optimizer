@@ -84,6 +84,16 @@
   </div>
 </div>
 
+<!-- ── Dispatch Notes ────────────────────────────────────────── -->
+<div class="card" id="notes-card" style="margin-bottom:16px;display:none">
+  <div class="card-title" style="margin-bottom:8px">📝 Dispatch Notes</div>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Describe what volunteers should do — visible on their shared link.</p>
+  <textarea name="dispatch_notes" form="dispatch-form" id="dispatch-notes"
+    placeholder="e.g. Knock and introduce yourself, leave lit if no answer, record any voter concerns…"
+    style="width:100%;min-height:90px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:inherit;font-size:13px;padding:10px 12px;resize:vertical;outline:none;box-sizing:border-box"
+    onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+</div>
+
 <!-- ── Options + Launch ──────────────────────────────────────── -->
 <div class="card">
   <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
@@ -144,11 +154,16 @@ function onTypeChange(type){
   });
   const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.sign_delivery;
   document.getElementById('addr-panel-title').textContent = cfg.addrTitle;
+
+  // Show notes card for general + door_knock
+  const notesCard = document.getElementById('notes-card');
+  notesCard.style.display = (type==='general'||type==='door_knock'||type==='gotv') ? '' : 'none';
+
   // For sign_recovery, auto-check missing sign addresses
   if(type==='sign_recovery'){
     document.querySelectorAll('.addr-item').forEach(item=>{
       const cb = item.querySelector('input[type=checkbox]');
-      cb.checked = item.querySelector('[data-missing]') !== null || item.textContent.includes('⚠️');
+      cb.checked = item.textContent.includes('⚠️');
     });
     updateSummary();
   }
