@@ -61,6 +61,11 @@ body{font-family:'DM Sans',-apple-system,sans-serif;background:var(--bg);color:v
     <span id="prog-label">{{ done_ct }} of {{ total }} placed</span>
     <span id="prog-pct">{{ (done_ct/total*100)|round if total else 0 }}%</span>
   </div>
+  {% if run.notes %}
+  <div style="margin-top:10px;font-size:13px;color:rgba(255,255,255,.85);background:rgba(255,255,255,.1);border-radius:8px;padding:10px 14px;border-left:3px solid rgba(255,255,255,.4)">
+    📝 {{ run.notes }}
+  </div>
+  {% endif %}
 </div>
 
 {% if done_ct == total and total > 0 %}
