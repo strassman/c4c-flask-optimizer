@@ -146,7 +146,7 @@
 {% for a in d.addrs %}{% if a.email %}{% set _ = all_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = all_phones.append(a.phone) %}{% endif %}{% endfor %}
 
 <div class="section-header">
-  <h2 style="margin:0">All Constituents — {{ total|default(d.addrs|length) | int | format_number if total is defined else d.addrs|length }} total</h2>
+  <h2 style="margin:0">All Constituents — {{ "{:,}".format(total|default(d.addrs|length)|int) }} total</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     {% if d.addrs %}
     <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export</a>
