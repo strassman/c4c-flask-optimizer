@@ -161,16 +161,136 @@
     {% else %}<div class="empty-state">No {{ mt.label }} runs yet</div>{% endif %}
   </div>
 
+  <!-- Constituent tables for this service -->
+  {% if ss.get('runs', 0) > 0 %}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">✅ Received {{ mt.label }}</div>
+        <span style="font-size:11px;color:var(--text3)" id="done-count-{{ mt.id }}"></span>
+      </div>
+      <div style="overflow-y:auto;max-height:320px" id="done-table-{{ mt.id }}">
+        <div style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Loading…</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%;display:none" id="done-more-{{ mt.id }}" onclick="loadServiceTable('{{ mt.id }}','done',true)">Load more</button>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">⏳ Not Yet Received</div>
+        <span style="font-size:11px;color:var(--text3)" id="pending-count-{{ mt.id }}"></span>
+      </div>
+      <div style="overflow-y:auto;max-height:320px" id="pending-table-{{ mt.id }}">
+        <div style="color:var(--text3);font-size:12px;padding:20px;text-align:center">Loading…</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px;width:100%;display:none" id="pending-more-{{ mt.id }}" onclick="loadServiceTable('{{ mt.id }}','pending',true)">Load more</button>
+    </div>
+  </div>
+  {% endif %}
+
 </div>
 {% endfor %}
 
 <script>
-// ── Tab switching ───────────────────────────────────────
-function switchService(id, btn){
+// ── Service constituent tables ──────────────────────────────
+const servicePages = {};
+
+function partyBadge(p){
+  if(!p) return '—';
+  const colors={'DEM':'var(--accent)','REP':'var(--red)','UNA':'var(--text3)'};
+  return `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${colors[p]||'var(--surface3)'}22;color:${colors[p]||'var(--text3)'};border:1px solid ${colors[p]||'var(--border)'}44">${p}</span>`;
+}
+
+function renderServiceTable(mtId, view, rows, hasMore){
+  const el = document.getElementById(`${view}-table-${mtId}`);
+  const moreBtn = document.getElementById(`${view}-more-${mtId}`);
+  const countEl = document.getElementById(`${view}-count-${mtId}`);
+  if(!el) return;
+  if(!rows.length){ el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:20px;text-align:center">None yet</div>'; return; }
+  const existing = el.querySelector('table');
+  let tbody = existing ? existing.querySelector('tbody') : null;
+  if(!existing){
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="color:var(--text3)">
+        <th style="padding:4px 8px;text-align:left">Name</th>
+        <th style="padding:4px 8px;text-align:left">Address</th>
+        <th style="padding:4px 8px">Party</th>
+        ${view==='done'?'<th style="padding:4px 8px">By</th><th style="padding:4px 8px">Date</th>':''}
+        <th style="padding:4px 8px"></th>
+      </tr></thead>
+      <tbody></tbody></table>`;
+    tbody = el.querySelector('tbody');
+  }
+  rows.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.style.cssText='border-top:1px solid var(--border)';
+    tr.innerHTML = `
+      <td style="padding:5px 8px;font-weight:500">${r.name}</td>
+      <td style="padding:5px 8px;color:var(--text2);font-size:11px">${r.address}</td>
+      <td style="padding:5px 8px;text-align:center">${partyBadge(r.party)}</td>
+      ${view==='done'?`<td style="padding:5px 8px;color:var(--text3)">${r.vol||'—'}</td><td style="padding:5px 8px;color:var(--text3)">${r.date||'—'}</td>`:''}
+      <td style="padding:5px 8px;text-align:right">
+        ${view==='done'
+          ? `<button onclick="markConstit('${r.id}','pending',this)" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:var(--surface3);color:var(--text2);cursor:pointer">↩ Undo</button>`
+          : `<button onclick="markConstit('${r.id}','delivered',this)" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid rgba(52,199,89,.3);background:rgba(52,199,89,.1);color:var(--green);cursor:pointer">✅ Mark Done</button>`
+        }
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  if(moreBtn) moreBtn.style.display = hasMore ? 'block' : 'none';
+  if(countEl) countEl.textContent = `${tbody.querySelectorAll('tr').length} shown`;
+}
+
+async function loadServiceTable(mtId, view, append=false){
+  if(!append) servicePages[`${mtId}-${view}`] = 1;
+  else servicePages[`${mtId}-${view}`] = (servicePages[`${mtId}-${view}`]||1) + 1;
+  const page = servicePages[`${mtId}-${view}`] || 1;
+  try {
+    const r = await fetch(`/api/service/constituents?run_type=${mtId}&view=${view}&page=${page}`);
+    const d = await r.json();
+    if(!append){
+      const el = document.getElementById(`${view}-table-${mtId}`);
+      if(el) el.innerHTML='';
+    }
+    renderServiceTable(mtId, view, d.rows||[], d.has_more||false);
+  } catch(e) {
+    const el = document.getElementById(`${view}-table-${mtId}`);
+    if(el) el.innerHTML='<div style="color:var(--text3);font-size:12px;padding:12px">Error loading data</div>';
+  }
+}
+
+async function markConstit(id, status, btn){
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/api/constituent/status', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id, status})
+    });
+    const d = await r.json();
+    if(d.ok){
+      const row = btn.closest('tr');
+      row.style.opacity='0'; row.style.transition='opacity .3s';
+      setTimeout(()=>row.remove(), 300);
+    } else { btn.textContent='Error'; btn.disabled=false; }
+  } catch(e){ btn.textContent='Error'; btn.disabled=false; }
+}
+
+// Load tables when a service tab is activated
+const origSwitchService = window.switchService;
+window.switchService = function(id, btn){
+  origSwitchService ? origSwitchService(id,btn) : null;
   document.querySelectorAll('.service-panel').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.mission-tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   btn.classList.add('active');
+  // Load constituent tables if this is a service panel
+  if(id !== 'overview'){
+    const doneEl = document.getElementById(`done-table-${id}`);
+    if(doneEl && doneEl.textContent.includes('Loading')){
+      loadServiceTable(id,'done');
+      loadServiceTable(id,'pending');
+    }
+  }
 }
 
 // ── Chart helper ────────────────────────────────────────
