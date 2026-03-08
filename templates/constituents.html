@@ -47,10 +47,10 @@
 
 {% if d.addrs %}
 <div class="stat-row">
-  <div class="stat-card"><div class="stat-label">Total</div><div class="stat-value blue">{{ d.addrs|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value orange">{{ pending|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value green">{{ delivered|length }}</div></div>
-  <div class="stat-card"><div class="stat-label">Sign Requests</div><div class="stat-value">{{ sign_req|length }}</div></div>
+  <div class="stat-card"><div class="stat-label">Total Voters</div><div class="stat-value blue" id="sc-total">—</div></div>
+  <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value orange" id="sc-pending">—</div></div>
+  <div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value green" id="sc-placed">—</div></div>
+  <div class="stat-card"><div class="stat-label">Missing</div><div class="stat-value" id="sc-missing" style="color:var(--red)">—</div></div>
 </div>
 {% endif %}
 
@@ -201,106 +201,7 @@
 
 <hr class="divider">
 
-<!-- Sign Requests -->
-<div class="section-header">
-  <h2 style="margin:0">🪧 Sign Requests — {{ sign_req|length }}</h2>
-</div>
-{% if sign_req %}
-<div class="search-bar"><input type="text" id="sr-search" placeholder="Search sign requests..." oninput="filterTable('sr-search','sr-tbody','sr-count')"></div>
-<p class="tbl-count" id="sr-count"></p>
-<div class="tbl-wrap">
-  <table class="tbl">
-    <thead><tr><th>Name</th><th>Address</th><th>Phone</th><th>Status</th><th></th></tr></thead>
-    <tbody id="sr-tbody">
-    {% for a in sign_req %}
-    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
-      <td><strong>{{ a.contact or '—' }}</strong></td>
-      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
-      <td>{% if a.phone %}<a href="sms:{{ a.phone }}" onclick="event.stopPropagation()" style="color:var(--accent)">{{ a.phone }}</a>{% else %}—{% endif %}</td>
-      <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
-      <td onclick="event.stopPropagation()">
-        {% if a.status != 'delivered' %}
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="mark_delivered"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-success btn-sm">✅</button></form>
-        {% endif %}
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}<p style="color:var(--text3);font-size:13px">No sign requests yet.</p>{% endif %}
 
-<hr class="divider">
-
-<!-- Pending -->
-<div class="section-header">
-  <h2 style="margin:0">⏳ Pending — {{ pending|length }}</h2>
-  {% if pending %}<form method="POST" onsubmit="return confirm('Clear all pending?')" style="display:inline"><input type="hidden" name="action" value="clear_pending"><button class="btn btn-danger btn-sm">🗑️ Clear Pending</button></form>{% endif %}
-</div>
-{% if pending %}
-<div class="search-bar"><input type="text" id="pend-search" placeholder="Search pending..." oninput="filterTable('pend-search','pend-tbody','pend-count')"></div>
-<p class="tbl-count" id="pend-count"></p>
-<div class="tbl-wrap">
-  <table class="tbl">
-    <thead><tr><th>Name</th><th>Address</th><th>Party</th><th>Score</th><th>Sign?</th><th></th></tr></thead>
-    <tbody id="pend-tbody">
-    {% for a in pending %}
-    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
-      <td><strong>{{ a.contact or '—' }}</strong></td>
-      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
-      <td>{% if a.party %}<span class="badge badge-gray">{{ a.party }}</span>{% else %}—{% endif %}</td>
-      <td>{% if a.support_score %}<strong>{{ a.support_score }}</strong>{% else %}—{% endif %}</td>
-      <td>{% if a.sign_requested %}<span style="color:var(--orange)">🪧</span>{% else %}—{% endif %}</td>
-      <td onclick="event.stopPropagation()">
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="mark_delivered"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-success btn-sm">✅</button></form>
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}<p style="color:var(--text3);font-size:13px">No pending addresses.</p>{% endif %}
-
-<hr class="divider">
-
-<!-- Placed -->
-<div class="section-header">
-  <h2 style="margin:0">✅ Placed — {{ delivered|length }}</h2>
-  {% if delivered %}<form method="POST" onsubmit="return confirm('Clear all delivered?')" style="display:inline"><input type="hidden" name="action" value="clear_delivered"><button class="btn btn-danger btn-sm">🗑️ Clear Delivered</button></form>{% endif %}
-</div>
-{% if delivered %}
-<div class="search-bar"><input type="text" id="del-search" placeholder="Search placed..." oninput="filterTable('del-search','del-tbody','del-count')"></div>
-<p class="tbl-count" id="del-count"></p>
-<div class="tbl-wrap">
-  <table class="tbl">
-    <thead><tr><th>Name</th><th>Address</th><th>Date Placed</th><th>Note</th><th></th></tr></thead>
-    <tbody id="del-tbody">
-    {% for a in delivered %}
-    <tr class="clickable-row" onclick="openVoterById('{{ a.id }}')">
-      <td><strong>{{ a.contact or '—' }}</strong></td>
-      <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
-      <td>{{ a.delivered_date or '—' }}</td>
-      <td style="color:var(--text3)">{{ a.note or '—' }}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap">
-        {% if a.missing %}
-        <span style="color:var(--red);font-size:12px;font-weight:600;margin-right:6px">🚨 Missing</span>
-        <form method="POST" action="/constituents/unflag_missing" style="display:inline"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">✓ Found</button></form>
-        {% else %}
-        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openMissingModal('{{ a.address }}')" title="Report missing">🚨</button>
-        {% endif %}
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="undo_delivery"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-secondary btn-sm">↩️</button></form>
-        <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="address" value="{{ a.address }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete?')">✕</button></form>
-      </td>
-    </tr>
-    {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% else %}<p style="color:var(--text3);font-size:13px">No signs placed yet.</p>{% endif %}
-
-<!-- Missing sign modal -->
 <div class="modal-overlay hidden" id="missing-modal" onclick="if(event.target===this)closeMissing()">
   <div class="modal" style="max-width:400px">
     <div class="modal-header">
@@ -528,5 +429,18 @@ function closeMissing() {
   document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeVoter(); closeMissing(); } });
+
+// Load stats from API
+async function loadConstituentStats(){
+  try {
+    const r = await fetch('/api/constituents/stats');
+    const d = await r.json();
+    document.getElementById('sc-total').textContent   = d.total.toLocaleString();
+    document.getElementById('sc-pending').textContent = d.pending.toLocaleString();
+    document.getElementById('sc-placed').textContent  = d.placed.toLocaleString();
+    document.getElementById('sc-missing').textContent = d.missing.toLocaleString();
+  } catch(e) {}
+}
+loadConstituentStats();
 </script>
 {% endblock %}
