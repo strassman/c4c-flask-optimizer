@@ -60,9 +60,9 @@
     {% else %}
     <div style="display:flex;gap:8px;margin:10px 0 8px;align-items:center">
       <input type="text" id="addr-search" placeholder="Filter…" oninput="filterAddrs(this.value)" style="flex:1;margin:0">
-      <button type="button" id="toggle-visited-btn" class="btn btn-secondary btn-sm" onclick="toggleVisited()" data-hiding="false">🙈 Hide Visited</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()">All</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
+      <button type="button" id="toggle-visited-btn" data-tip="Toggle display of already-visited addresses" class="btn btn-secondary btn-sm" onclick="toggleVisited()" data-hiding="false">🙈 Hide Visited</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()" data-tip="Select all visible addresses">All</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()" data-tip="Deselect all addresses">Clear</button>
     </div>
     <div id="addr-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
     {% set type_icons = {'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪','sign_recovery':'🔄','gotv':'🗳️','general':'📋'} %}
