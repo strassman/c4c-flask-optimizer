@@ -735,7 +735,33 @@ def delivery_run():
 
     # GET — load fresh data
     vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
-    addrs=sanitize(db().table("constituents").select("id,address,lat,lng,status,first_name,last_name,missing,precinct,party,support_score").eq("campaign_id",campaign_id).eq("status","pending").order("address").limit(2000).execute().data or [])
+    addrs=sanitize(db().table("constituents").select("id,address,lat,lng,status,first_name,last_name,missing,precinct,party,support_score").eq("campaign_id",campaign_id).order("address").limit(2000).execute().data or [])
+
+    # Build prior visit map: address -> list of {run_type, date, vol_name}
+    try:
+        prior_stops = db().table("run_stops")            .select("address,status,volunteer_name,created_at,run_id")            .eq("campaign_id", campaign_id)            .eq("status","delivered")            .limit(5000).execute().data or []
+        # Also get run types
+        run_ids = list({s["run_id"] for s in prior_stops if s.get("run_id")})
+        run_type_map = {}
+        if run_ids:
+            runs_data = db().table("runs").select("id,run_type,created_at").in_("id", run_ids).execute().data or []
+            run_type_map = {r["id"]: r for r in runs_data}
+        prior_map = {}
+        for s in prior_stops:
+            addr = s.get("address","")
+            if not addr: continue
+            run_info = run_type_map.get(s.get("run_id",""), {})
+            run_type = run_info.get("run_type","") or ""
+            date_str = (s.get("created_at","") or "")[:10]
+            entry = {"run_type": run_type, "date": date_str, "vol": s.get("volunteer_name","") or ""}
+            prior_map.setdefault(addr, []).append(entry)
+    except Exception as e:
+        print(f"prior visit load error: {e}", flush=True)
+        prior_map = {}
+
+    # Attach prior visits to each address
+    for a in addrs:
+        a["prior_visits"] = prior_map.get(a.get("address",""), [])
     for v in vols:
         if not v.get("lat") and v.get("address"):
             lat,lng=geocode(v["address"])
