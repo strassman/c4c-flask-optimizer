@@ -772,13 +772,26 @@ def delivery_run():
             if lat: v["lat"]=lat; v["lng"]=lng
     addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
     import json as _json
+    SVG = lambda p,c: f'<svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="{c}" stroke-width="1.6">{p}</svg>'
     dispatch_types=[
-        {"id":"sign_delivery","label":"Sign Delivery","icon":"🪧","desc":"Drop off yard signs, photo proof required"},
-        {"id":"lit_drop",     "label":"Lit Drop",     "icon":"📚","desc":"Leave literature at doors, no photo needed"},
-        {"id":"door_knock",   "label":"Door Knock",   "icon":"🚪","desc":"Canvassing — track contacts at each door"},
-        {"id":"sign_recovery","label":"Sign Recovery","icon":"🔄","desc":"Collect missing or damaged signs"},
-        {"id":"gotv",         "label":"GOTV",         "icon":"🗳️","desc":"Get Out The Vote — staging and call lists"},
-        {"id":"general",      "label":"General",      "icon":"📋","desc":"Custom volunteer dispatch"},
+        {"id":"sign_delivery","label":"Sign Delivery","color":"#4f8ef7",
+         "icon": SVG('<rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/>','#4f8ef7'),
+         "desc":"Drop off yard signs, photo proof required"},
+        {"id":"lit_drop","label":"Lit Drop","color":"#ff9500",
+         "icon": SVG('<path d="M4 4h12v2l-2 4v6H6v-6L4 6z"/><line x1="6" y1="10" x2="14" y2="10"/>','#ff9500'),
+         "desc":"Leave literature at doors, no photo needed"},
+        {"id":"door_knock","label":"Door Knock","color":"#34c759",
+         "icon": SVG('<rect x="4" y="2" width="12" height="18" rx="1"/><circle cx="13.5" cy="11" r="1" fill="#34c759"/>','#34c759'),
+         "desc":"Canvassing — track contacts at each door"},
+        {"id":"sign_recovery","label":"Sign Recovery","color":"#bf5af2",
+         "icon": SVG('<path d="M4 10a6 6 0 1 0 1.5-4"/><polyline points="1,3 4,6 7,3"/><polyline points="8,10 10,12 14,8"/>','#bf5af2'),
+         "desc":"Collect missing or damaged signs"},
+        {"id":"gotv","label":"GOTV","color":"#ffd60a",
+         "icon": SVG('<rect x="3" y="4" width="14" height="14" rx="1"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="13" y1="2" x2="13" y2="6"/><polyline points="7,12 9,14 13,11"/>','#ffd60a'),
+         "desc":"Get Out The Vote — staging and call lists"},
+        {"id":"general","label":"General","color":"#8b92a5",
+         "icon": SVG('<rect x="3" y="3" width="14" height="14" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/>','#8b92a5'),
+         "desc":"Custom volunteer dispatch"},
     ]
     return render_template("dispatch.html",
                            d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},
@@ -1241,13 +1254,14 @@ def analytics():
     run_type_map = {r["id"]: r.get("run_type","general") for r in all_runs}
 
     # Per-service stats
+    SVG2 = lambda p,c: f'<svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="{c}" stroke-width="1.8">{p}</svg>'
     MISSION_TYPES = [
-        {"id":"sign_delivery","label":"Sign Delivery","icon":"🪧"},
-        {"id":"lit_drop",     "label":"Lit Drop",     "icon":"📚"},
-        {"id":"door_knock",   "label":"Door Knock",   "icon":"🚪"},
-        {"id":"sign_recovery","label":"Sign Recovery","icon":"🔄"},
-        {"id":"gotv",         "label":"GOTV",         "icon":"🗳️"},
-        {"id":"general",      "label":"General",      "icon":"📋"},
+        {"id":"sign_delivery","label":"Sign Delivery","icon": SVG2('<rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/>','#4f8ef7')},
+        {"id":"lit_drop",     "label":"Lit Drop",     "icon": SVG2('<path d="M4 4h12v2l-2 4v6H6v-6L4 6z"/><line x1="6" y1="10" x2="14" y2="10"/>','#ff9500')},
+        {"id":"door_knock",   "label":"Door Knock",   "icon": SVG2('<rect x="4" y="2" width="12" height="18" rx="1"/><circle cx="13.5" cy="11" r="1" fill="#34c759"/>','#34c759')},
+        {"id":"sign_recovery","label":"Sign Recovery","icon": SVG2('<path d="M4 10a6 6 0 1 0 1.5-4"/><polyline points="1,3 4,6 7,3"/><polyline points="8,10 10,12 14,8"/>','#bf5af2')},
+        {"id":"gotv",         "label":"GOTV",         "icon": SVG2('<rect x="3" y="4" width="14" height="14" rx="1"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="13" y1="2" x2="13" y2="6"/><polyline points="7,12 9,14 13,11"/>','#ffd60a')},
+        {"id":"general",      "label":"General",      "icon": SVG2('<rect x="3" y="3" width="14" height="14" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/>','#8b92a5')},
     ]
 
     service_stats = {}
