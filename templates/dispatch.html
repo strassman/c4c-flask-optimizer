@@ -73,6 +73,7 @@
     {% set has_visits = a.prior_visits | length > 0 %}
     <label class="addr-item" 
            data-missing="{{ a.missing }}"
+           data-status="{{ a.status }}"
            data-visited="{{ 'true' if has_visits else 'false' }}"
            style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text);{% if has_visits %}opacity:0.6;{% endif %}">
       <input type="checkbox" name="selected_addrs" value="{{ a.id }}" style="margin-top:3px;flex-shrink:0">
@@ -170,7 +171,7 @@ const TYPE_CONFIG = {
   sign_delivery: { addrTitle:'🪧 Sign Addresses',   addrFilter: a => true },
   lit_drop:      { addrTitle:'📚 Drop Addresses',   addrFilter: a => true },
   door_knock:    { addrTitle:'🚪 Canvass Addresses', addrFilter: a => true },
-  sign_recovery: { addrTitle:'🔄 Missing Signs',    addrFilter: a => a.dataset.missing==='True' },
+  sign_recovery: { addrTitle:'🔄 Signs to Recover', addrFilter: a => a.dataset.status==='delivered' },
   gotv:          { addrTitle:'🗳️ GOTV Addresses',   addrFilter: a => true },
   general:       { addrTitle:'📋 Stop Addresses',   addrFilter: a => true },
 };
