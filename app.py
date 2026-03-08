@@ -548,8 +548,27 @@ def constituents():
 
         return redirect(url_for("constituents"))
 
-    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).order("created_at").execute().data or [])
-    return render_template("constituents.html", d={"addrs":addrs,"cname":cname,"cid":campaign_id}, msg=msg)
+    # Paginated load — 200 per page with search
+    page = int(request.args.get("page", 1))
+    per_page = 200
+    search = request.args.get("q","").strip()
+    offset = (page - 1) * per_page
+
+    # Get total count
+    try:
+        count_res = db().table("constituents").select("id", count="exact").eq("campaign_id", campaign_id).execute()
+        total = count_res.count or 0
+    except:
+        total = 0
+
+    q = db().table("constituents").select("*").eq("campaign_id", campaign_id)
+    if search:
+        q = q.ilike("address", f"%{search}%")
+    addrs = sanitize(q.order("created_at", desc=True).range(offset, offset + per_page - 1).execute().data or [])
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template("constituents.html",
+        d={"addrs":addrs,"cname":cname,"cid":campaign_id},
+        msg=msg, page=page, total_pages=total_pages, total=total, search=search, per_page=per_page)
 
 @app.route("/constituents/flag_missing", methods=["POST"])
 @login_required
@@ -716,7 +735,7 @@ def delivery_run():
 
     # GET — load fresh data
     vols=sanitize(db().table("volunteers").select("*").eq("campaign_id",campaign_id).order("name").execute().data or [])
-    addrs=sanitize(db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").order("address").execute().data or [])
+    addrs=sanitize(db().table("constituents").select("id,address,lat,lng,status,first_name,last_name,missing,precinct,party,support_score").eq("campaign_id",campaign_id).eq("status","pending").order("address").limit(2000).execute().data or [])
     for v in vols:
         if not v.get("lat") and v.get("address"):
             lat,lng=geocode(v["address"])
@@ -1066,11 +1085,14 @@ def api_constituents():
 def api_constituent_stats():
     campaign_id = cid()
     try:
-        all_rows = db().table("constituents")            .select("id,status,missing")            .eq("campaign_id", campaign_id).execute().data or []
-        total    = len(all_rows)
-        placed   = sum(1 for r in all_rows if r.get("status") == "delivered")
-        pending  = total - placed
-        missing  = sum(1 for r in all_rows if r.get("missing"))
+        # Use count queries instead of loading all rows
+        total_res   = db().table("constituents").select("id", count="exact").eq("campaign_id", campaign_id).execute()
+        placed_res  = db().table("constituents").select("id", count="exact").eq("campaign_id", campaign_id).eq("status","delivered").execute()
+        missing_res = db().table("constituents").select("id", count="exact").eq("campaign_id", campaign_id).eq("missing", True).execute()
+        total   = total_res.count or 0
+        placed  = placed_res.count or 0
+        pending = total - placed
+        missing = missing_res.count or 0
         return jsonify({"total": total, "placed": placed, "pending": pending, "missing": missing})
     except Exception as e:
         return jsonify({"total":0,"placed":0,"pending":0,"missing":0})
@@ -1083,7 +1105,7 @@ def api_constituent_stats():
 def analytics():
     from collections import defaultdict
     campaign_id=cid(); cname=session.get("cname","Campaign")
-    all_csts=sanitize(db().table("constituents").select("id,status,party,support_score,sign_requested,donor,volunteer_interest,delivered_date,delivered_by").eq("campaign_id",campaign_id).execute().data or [])
+    all_csts=sanitize(db().table("constituents").select("id,status,party,support_score,sign_requested,donor,volunteer_interest,delivered_date,delivered_by").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
     all_runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).execute().data or [])
     all_stops=sanitize(db().table("run_stops").select("id,status,volunteer_name,delivered_at,photo_url").eq("campaign_id",campaign_id).execute().data or [])
     all_photos=sanitize(db().table("sign_photos").select("id,volunteer_name,taken_at").eq("campaign_id",campaign_id).execute().data or [])
