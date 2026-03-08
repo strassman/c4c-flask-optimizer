@@ -4,7 +4,7 @@
 
 {% if msg %}<div class="alert {% if '❌' in msg %}alert-error{% else %}alert-success{% endif %}" style="margin-bottom:16px">{{ msg }}</div>{% endif %}
 
-<h1>🚀 Dispatch</h1>
+<h1>Dispatch</h1>
 <p class="subtitle">Choose a mission type, assign volunteers, and send them out</p>
 
 <form method="POST" id="dispatch-form">
@@ -18,7 +18,7 @@
       <input type="radio" name="dispatch_type" value="{{ dt.id }}"
              {% if loop.first %}checked{% endif %}
              onchange="onTypeChange(this.value)" style="display:none">
-      <div class="dispatch-type-icon">{{ dt.icon }}</div>
+      <div class="dispatch-type-icon" style="color:{{ dt.color }}">{{ dt.icon | safe }}</div>
       <div class="dispatch-type-label">{{ dt.label }}</div>
       <div class="dispatch-type-desc">{{ dt.desc }}</div>
     </label>
@@ -30,7 +30,7 @@
 <div class="grid2" style="margin-bottom:16px">
 
   <div class="card" style="display:flex;flex-direction:column">
-    <div class="card-title">👥 Volunteers</div>
+    <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="7" r="3"/><path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="15" cy="8" r="2.5"/><path d="M17.5 17c0-2.5-1.8-4.5-4-4.9"/></svg></span> Volunteers</div>
     {% if not d.vols %}
     <div class="alert alert-info" style="margin-top:10px">Add volunteers first.</div>
     {% else %}
@@ -44,7 +44,7 @@
         <strong style="font-size:13px">{{ v.name }}</strong>
         <span class="prox-badge" style="display:none;margin-left:6px;font-size:11px;color:var(--orange);font-weight:600"></span>
         <br><span style="color:var(--text3);font-size:12px">{{ v.address }}</span>
-        {% if v.has_vehicle %}<span style="font-size:11px;color:var(--green);margin-left:4px">🚗</span>{% endif %}
+        {% if v.has_vehicle %}<span style="font-size:10px;color:var(--green);margin-left:6px;font-weight:600;letter-spacing:.03em">VEHICLE</span>{% endif %}
       </span>
     </label>
     {% endfor %}
@@ -54,7 +54,7 @@
 
   <!-- Address panel — adapts per type -->
   <div class="card" style="display:flex;flex-direction:column">
-    <div class="card-title" id="addr-panel-title">📍 Addresses</div>
+    <div class="card-title" id="addr-panel-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg></span> Addresses</div>
     {% if not d.addrs %}
     <div class="alert alert-info" style="margin-top:10px">No pending addresses.</div>
     {% else %}
@@ -65,7 +65,7 @@
       <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
     </div>
     <div id="addr-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
-    {% set type_icons = {'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪','sign_recovery':'🔄','gotv':'🗳️','general':'📋'} %}
+    {% set type_icons = {'sign_delivery':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/></svg></span>','lit_drop':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><path d="M4 4h12v2l-2 4v6H6v-6L4 6z"/><line x1="6" y1="10" x2="14" y2="10"/></svg></span>','door_knock':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="1.8"><rect x="4" y="2" width="12" height="18" rx="1"/><circle cx="13.5" cy="11" r="1" fill="currentColor"/></svg></span>','sign_recovery':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#bf5af2" stroke-width="1.8"><path d="M4 10a6 6 0 1 0 1.5-4"/><polyline points="1,3 4,6 7,3"/><polyline points="8,10 10,12 14,8"/></svg></span>','gotv':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ffd60a" stroke-width="1.8"><rect x="3" y="4" width="13" height="13" rx="1"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="13" y1="2" x2="13" y2="6"/><polyline points="7,12 9,14 13,11"/></svg></span>','general':'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#8b92a5" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/></svg></span>'} %}
     {# Sort: no prior visits first, then visited ones #}
     {% set fresh = d.addrs | selectattr('prior_visits', 'equalto', []) | list %}
     {% set visited = d.addrs | rejectattr('prior_visits', 'equalto', []) | list %}
@@ -83,13 +83,13 @@
         <span style="color:var(--text3);font-size:12px"> · {{ a.first_name }} {{ a.last_name }}</span>
         {% endif %}
         {% if a.missing %}
-        <span style="font-size:11px;color:var(--orange);margin-left:4px">⚠️ Missing</span>
+        <span style="font-size:11px;color:var(--orange);margin-left:4px"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><path d="M10 2l8 16H2z"/><line x1="10" y1="9" x2="10" y2="13"/><circle cx="10" cy="15.5" r=".8" fill="currentColor"/></svg></span> Missing</span>
         {% endif %}
         {% if has_visits %}
         <br>
         {% for v in a.prior_visits[:3] %}
         <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-top:3px;margin-right:3px;color:var(--text3)">
-          {{ type_icons.get(v.run_type, '📋') }} {{ v.run_type | replace('_',' ') | title }}
+          {{ type_icons.get(v.run_type, '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#8b92a5" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/></svg></span>') }} {{ v.run_type | replace('_',' ') | title }}
           {% if v.date %}<span style="color:var(--text3)">· {{ v.date }}</span>{% endif %}
           {% if v.vol %}<span>· {{ v.vol }}</span>{% endif %}
         </span>
@@ -105,7 +105,7 @@
     {% set visited_count = d.addrs | rejectattr('prior_visits', 'equalto', []) | list | length %}
     <p style="color:var(--text3);font-size:12px;margin-top:8px" id="addr-count">
       {% if visited_count > 0 %}
-      <span style="color:var(--orange)">⚠️ {{ visited_count }} address{{ 'es' if visited_count != 1 }} already visited (shown at bottom)</span>
+      <span style="color:var(--orange)"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><path d="M10 2l8 16H2z"/><line x1="10" y1="9" x2="10" y2="13"/><circle cx="10" cy="15.5" r=".8" fill="currentColor"/></svg></span> {{ visited_count }} address{{ 'es' if visited_count != 1 }} already visited (shown at bottom)</span>
       {% endif %}
     </p>
     {% endif %}
@@ -127,13 +127,13 @@
   <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end">
 
     <div>
-      <div class="card-title" style="margin-bottom:10px">⚡ Routing Method</div>
+      <div class="card-title" style="margin-bottom:10px"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="10,2 12.4,7.5 18.5,8 14,12 15.5,18 10,15 4.5,18 6,12 1.5,8 7.6,7.5"/></svg></span> Routing Method</div>
       <div style="display:flex;gap:16px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:var(--text2);font-size:13px">
-          <input type="radio" name="urgency" value="today" checked> 🚗 Optimized — full TSP routing
+          <input type="radio" name="urgency" value="today" checked> Optimized — full TSP routing
         </label>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:var(--text2);font-size:13px">
-          <input type="radio" name="urgency" value="soon"> 📍 Proximity — nearest-first clusters
+          <input type="radio" name="urgency" value="soon"> <span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg></span> Proximity — nearest-first clusters
         </label>
       </div>
     </div>
@@ -159,7 +159,7 @@
 }
 .dispatch-type-card:hover { border-color:var(--border2);background:var(--surface2) }
 .dispatch-type-card.selected { border-color:var(--accent);background:rgba(79,142,247,.1) }
-.dispatch-type-icon { font-size:26px;margin-bottom:6px }
+.dispatch-type-icon { width:36px;height:36px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;background:rgba(255,255,255,.04);border-radius:10px;padding:6px }
 .dispatch-type-label { font-size:13px;font-weight:600;color:var(--text);margin-bottom:3px }
 .dispatch-type-desc { font-size:11px;color:var(--text3);line-height:1.4 }
 </style>
@@ -168,12 +168,12 @@
 const addrCoords = {{ addr_coords_json|safe }};
 
 const TYPE_CONFIG = {
-  sign_delivery: { addrTitle:'🪧 Sign Addresses',   addrFilter: a => true },
-  lit_drop:      { addrTitle:'📚 Drop Addresses',   addrFilter: a => true },
-  door_knock:    { addrTitle:'🚪 Canvass Addresses', addrFilter: a => true },
-  sign_recovery: { addrTitle:'🔄 Signs to Recover', addrFilter: a => a.dataset.status==='delivered' },
-  gotv:          { addrTitle:'🗳️ GOTV Addresses',   addrFilter: a => true },
-  general:       { addrTitle:'📋 Stop Addresses',   addrFilter: a => true },
+  sign_delivery: { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/></svg></span> Sign Addresses',   addrFilter: a => true },
+  lit_drop:      { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><path d="M4 4h12v2l-2 4v6H6v-6L4 6z"/><line x1="6" y1="10" x2="14" y2="10"/></svg></span> Drop Addresses',   addrFilter: a => true },
+  door_knock:    { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="1.8"><rect x="4" y="2" width="12" height="18" rx="1"/><circle cx="13.5" cy="11" r="1" fill="currentColor"/></svg></span> Canvass Addresses', addrFilter: a => true },
+  sign_recovery: { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#bf5af2" stroke-width="1.8"><path d="M4 10a6 6 0 1 0 1.5-4"/><polyline points="1,3 4,6 7,3"/><polyline points="8,10 10,12 14,8"/></svg></span> Signs to Recover', addrFilter: a => a.dataset.status==='delivered' },
+  gotv:          { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ffd60a" stroke-width="1.8"><rect x="3" y="4" width="13" height="13" rx="1"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="13" y1="2" x2="13" y2="6"/><polyline points="7,12 9,14 13,11"/></svg></span> GOTV Addresses',   addrFilter: a => true },
+  general:       { addrTitle:'<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#8b92a5" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/></svg></span> Stop Addresses',   addrFilter: a => true },
 };
 
 function onTypeChange(type){
