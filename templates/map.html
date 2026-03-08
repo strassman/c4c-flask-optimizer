@@ -102,21 +102,28 @@
     </button>
 
     <div class="sidebar-divider"></div>
+    <div class="sidebar-section-label">Territory</div>
+
+    <button class="map-nav-btn" id="nav-turfs" onclick="switchMap('turfs')">
+      <div class="map-nav-icon" style="background:rgba(191,90,242,.15)">
+        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#bf5af2" stroke-width="1.8"><polygon points="1,4 7,1 13,4 19,1 19,16 13,19 7,16 1,19"/><line x1="7" y1="1" x2="7" y2="16"/><line x1="13" y1="4" x2="13" y2="19"/><circle cx="10" cy="10" r="2" fill="#bf5af2" stroke="none"/></svg>
+      </div>
+      Turf Map
+      <span class="map-nav-badge" id="badge-turfs" style="background:rgba(191,90,242,.3);color:#bf5af2" id="badge-turfs">—</span>
+    </button>
+
+    <!-- Turf list panel (shown when turfs tab active) -->
+    <div id="turf-list-panel" style="display:none;margin-top:6px">
+      <div style="font-size:11px;color:var(--text3);padding:4px 10px 6px">Click a turf to toggle on map</div>
+      <div id="turf-list-items"></div>
+    </div>
+
+    <div class="sidebar-divider"></div>
     <div class="sidebar-section-label">Coming Soon</div>
 
     <button class="map-nav-btn soon">
       <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg></div>
       Sign Density
-      <span class="soon-tag">soon</span>
-    </button>
-    <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><path d="M3 3h14v14H3z"/><path d="M3 8h14M3 13h14M8 3v14M13 3v14" opacity=".5"/></svg></div>
-      Precinct Map
-      <span class="soon-tag">soon</span>
-    </button>
-    <button class="map-nav-btn soon">
-      <div class="map-nav-icon" style="background:rgba(255,255,255,.04)"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#535a6b" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M6 10a4 4 0 008 0"/></svg></div>
-      Heat Map
       <span class="soon-tag">soon</span>
     </button>
     <button class="map-nav-btn soon">
@@ -289,16 +296,25 @@ function switchMap(id){
   document.querySelectorAll('.map-nav-btn:not(.soon)').forEach(b=>b.classList.remove('active'));
   const btn = document.getElementById('nav-'+id);
   if(btn) btn.classList.add('active');
+  // Show/hide turf list panel
+  const turfPanel = document.getElementById('turf-list-panel');
+  if(turfPanel) turfPanel.style.display = id==='turfs' ? 'block' : 'none';
   const titles = {
-    routes:  ['Active Routes',   activeRun ? 'Viewing: '+activeRun.name : 'Select a run from the drawer'],
-    pending: ['Pending Stops',   'All unfinished stops across active runs'],
-    master:  ['All Constituents','Zoom in to see individual addresses'],
+    routes:  ['Active Routes',     activeRun ? 'Viewing: '+activeRun.name : 'Select a run from the drawer'],
+    pending: ['Pending Stops',     'All unfinished stops across active runs'],
+    master:  ['All Constituents',  'Zoom in to see individual addresses'],
     missing: ['Missing / Stolen Signs', 'Reported missing or stolen'],
+    turfs:   ['Turf Map',          ALL_TURFS.length ? `${ALL_TURFS.length} turf${ALL_TURFS.length!==1?'s':''} — click to toggle` : 'No turfs yet — create them on the Turfs page'],
   };
   const t = titles[id] || titles.routes;
   document.getElementById('map-title').textContent    = t[0];
   document.getElementById('map-subtitle').textContent = t[1];
-  renderMap(id);
+  if(id==='turfs'){
+    clearLayers();
+    renderTurfs();
+  } else {
+    renderMap(id);
+  }
 }
 
 // ── Drawer ────────────────────────────────────────────────────
@@ -408,6 +424,80 @@ async function renderMap(view){
 }
 
 // ── Init ──────────────────────────────────────────────────────
+const ALL_TURFS = {{ turfs_json | safe }};
+const turfLayers = {};
+
 switchMap(activeRun ? 'routes' : 'master');
+buildTurfListPanel();
+// Update turf badge
+document.getElementById('badge-turfs').textContent = ALL_TURFS.length || '0';
+
+// ── Turf rendering ────────────────────────────────────────────
+function buildTurfListPanel(){
+  const el = document.getElementById('turf-list-items');
+  if(!el || !ALL_TURFS.length) return;
+  el.innerHTML = ALL_TURFS.map(t=>`
+    <div onclick="toggleTurfLayer('${t.id}')" id="tl-${t.id}"
+         style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-radius:6px;margin:2px 4px;transition:background .12s"
+         onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background='transparent'">
+      <div style="width:10px;height:10px;border-radius:2px;background:${t.color};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${t.volunteer_name||'Unassigned'} · ${(t.precinct_ids||[]).length} precincts</div>
+      </div>
+      <div id="tl-eye-${t.id}" style="color:var(--text3)">
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 10s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/><circle cx="10" cy="10" r="2.5"/></svg>
+      </div>
+    </div>`).join('');
+}
+
+async function toggleTurfLayer(id){
+  if(turfLayers[id]){
+    map.removeLayer(turfLayers[id]);
+    delete turfLayers[id];
+    const eye = document.getElementById(`tl-eye-${id}`);
+    if(eye) eye.style.color='var(--text3)';
+    updateTurfLegend();
+    return;
+  }
+  const turf = ALL_TURFS.find(t=>t.id===id);
+  if(!turf) return;
+  const precincts = (turf.precinct_ids||[]).join(',');
+  if(!precincts){ return; }
+  const resp = await fetch(`/api/turf/precincts?precincts=${encodeURIComponent(precincts)}`);
+  const rows = await resp.json();
+  const lg = L.layerGroup().addTo(map);
+  const bounds = [];
+  rows.forEach(r=>{
+    if(!r.lat||!r.lng) return;
+    const done = r.status==='delivered';
+    L.circleMarker([r.lat,r.lng],{
+      radius:5, color: done?'#34c759':turf.color,
+      fillColor: done?'#34c759':turf.color,
+      fillOpacity: done?0.95:0.65, weight:1
+    }).bindPopup(`<b>${r.first_name||''} ${r.last_name||''}</b><br>${r.address||''}<br><span style="color:${done?'#34c759':'#ff9500'}">${done?'Contacted':'Pending'}</span>`).addTo(lg);
+    bounds.push([r.lat,r.lng]);
+  });
+  turfLayers[id] = lg;
+  const eye = document.getElementById(`tl-eye-${id}`);
+  if(eye) eye.style.color=turf.color;
+  if(bounds.length) map.fitBounds(bounds,{padding:[30,30]});
+  updateTurfLegend();
+}
+
+function updateTurfLegend(){
+  const active = ALL_TURFS.filter(t=>turfLayers[t.id]);
+  const legend = active.length
+    ? active.map(t=>`<div class="legend-row"><span class="legend-dot" style="background:${t.color}"></span><span>${t.name}${t.volunteer_name?' · '+t.volunteer_name:''}</span></div>`).join('')
+    : '<div class="legend-row" style="color:var(--text3)">Click turfs in the list to show on map</div>';
+  setLegend(legend);
+}
+
+async function renderTurfs(){
+  // Auto-load all turfs
+  for(const t of ALL_TURFS){
+    if(!turfLayers[t.id]) await toggleTurfLayer(t.id);
+  }
+}
 </script>
 {% endblock %}
