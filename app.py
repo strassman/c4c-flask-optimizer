@@ -1135,60 +1135,116 @@ def api_constituent_stats():
 def analytics():
     from collections import defaultdict
     campaign_id=cid(); cname=session.get("cname","Campaign")
-    all_csts=sanitize(db().table("constituents").select("id,status,party,support_score,sign_requested,donor,volunteer_interest,delivered_date,delivered_by").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
-    all_runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).execute().data or [])
-    all_stops=sanitize(db().table("run_stops").select("id,status,volunteer_name,delivered_at,photo_url").eq("campaign_id",campaign_id).execute().data or [])
-    all_photos=sanitize(db().table("sign_photos").select("id,volunteer_name,taken_at").eq("campaign_id",campaign_id).execute().data or [])
 
-    total_csts=len(all_csts); total_placed=sum(1 for a in all_csts if a["status"]=="delivered")
-    pct_complete=round(total_placed/total_csts*100) if total_csts else 0
+    # Use count queries for large tables
+    total_res    = db().table("constituents").select("id",count="exact").eq("campaign_id",campaign_id).execute()
+    placed_res   = db().table("constituents").select("id",count="exact").eq("campaign_id",campaign_id).eq("status","delivered").execute()
+    missing_res  = db().table("constituents").select("id",count="exact").eq("campaign_id",campaign_id).eq("missing",True).execute()
+    total_csts   = total_res.count or 0
+    total_placed = placed_res.count or 0
+    total_missing= missing_res.count or 0
+    pct_complete = round(total_placed/total_csts*100) if total_csts else 0
 
-    # Signs placed per day — last 14 days
-    placed_by_day=defaultdict(int)
-    for a in all_csts:
-        if a["status"]=="delivered" and a.get("delivered_date"):
-            placed_by_day[a["delivered_date"]]+=1
-    days_data=[]
-    for i in range(13,-1,-1):
-        d=(datetime.now()-timedelta(days=i)).strftime("%b %d")
-        days_data.append({"date":d,"count":placed_by_day.get(d,0)})
+    all_runs  = sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
+    all_stops = sanitize(db().table("run_stops").select("id,status,volunteer_name,photo_url,run_id,created_at,address").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
+    all_photos= sanitize(db().table("sign_photos").select("id,volunteer_name,taken_at").eq("campaign_id",campaign_id).execute().data or [])
 
-    # Volunteer leaderboard
+    # Map run_id -> run_type
+    run_type_map = {r["id"]: r.get("run_type","general") for r in all_runs}
+
+    # Per-service stats
+    MISSION_TYPES = [
+        {"id":"sign_delivery","label":"Sign Delivery","icon":"🪧"},
+        {"id":"lit_drop",     "label":"Lit Drop",     "icon":"📚"},
+        {"id":"door_knock",   "label":"Door Knock",   "icon":"🚪"},
+        {"id":"sign_recovery","label":"Sign Recovery","icon":"🔄"},
+        {"id":"gotv",         "label":"GOTV",         "icon":"🗳️"},
+        {"id":"general",      "label":"General",      "icon":"📋"},
+    ]
+
+    service_stats = {}
+    for mt in MISSION_TYPES:
+        mt_id = mt["id"]
+        mt_runs = [r for r in all_runs if r.get("run_type")==mt_id]
+        mt_run_ids = {r["id"] for r in mt_runs}
+        mt_stops = [s for s in all_stops if s.get("run_id") in mt_run_ids]
+        done = sum(1 for s in mt_stops if s["status"]=="delivered")
+        total = len(mt_stops)
+
+        # Vol leaderboard for this type
+        vol_counts = defaultdict(int)
+        for s in mt_stops:
+            if s["status"]=="delivered":
+                vol_counts[s.get("volunteer_name") or "Unknown"] += 1
+        leaderboard = sorted([{"name":k,"count":v} for k,v in vol_counts.items()], key=lambda x:-x["count"])[:10]
+
+        # Activity last 14 days
+        days_data=[]
+        from datetime import datetime as dt2, timedelta as td2
+        day_counts=defaultdict(int)
+        for s in mt_stops:
+            if s["status"]=="delivered" and s.get("created_at"):
+                day=s["created_at"][:10]
+                day_counts[day]+=1
+        for i in range(13,-1,-1):
+            day=(datetime.now()-timedelta(days=i)).strftime("%Y-%m-%d")
+            label=(datetime.now()-timedelta(days=i)).strftime("%b %d")
+            days_data.append({"date":label,"count":day_counts.get(day,0)})
+
+        # Run completion for this type
+        run_completions=[]
+        for r in mt_runs[:10]:
+            r_stops=[s for s in mt_stops if s.get("run_id")==r["id"]]
+            r_done=sum(1 for s in r_stops if s["status"]=="delivered")
+            r_total=len(r_stops)
+            run_completions.append({
+                "name":r["name"],"done":r_done,"total":r_total,
+                "pct":round(r_done/r_total*100) if r_total else 0,
+                "status":r["status"]
+            })
+
+        service_stats[mt_id] = {
+            "runs": len(mt_runs), "stops": total, "done": done,
+            "pct": round(done/total*100) if total else 0,
+            "leaderboard": leaderboard,
+            "days_data": days_data,
+            "run_completions": run_completions,
+        }
+
+    # Overall volunteer leaderboard across all types
     vol_stats=defaultdict(lambda:{"name":"","placed":0,"photos":0})
     for s in all_stops:
-        vn=s["volunteer_name"] or "Unknown"
+        vn=s.get("volunteer_name") or "Unknown"
         vol_stats[vn]["name"]=vn
         if s["status"]=="delivered": vol_stats[vn]["placed"]+=1
         if s.get("photo_url"):       vol_stats[vn]["photos"]+=1
-    leaderboard=sorted(vol_stats.values(),key=lambda x:x["placed"],reverse=True)
+    leaderboard=sorted(vol_stats.values(),key=lambda x:x["placed"],reverse=True)[:15]
 
-    # Party breakdown
-    party_counts=defaultdict(int)
-    for a in all_csts: party_counts[a.get("party") or "Unknown"]+=1
-
-    # Support score distribution
-    score_counts=defaultdict(int)
-    for a in all_csts:
-        s=a.get("support_score")
-        if s: score_counts[str(s)]+=1
-
-    # Run completion
-    run_stats=[]
-    for run in all_runs:
-        rs=db().table("run_stops").select("id,status").eq("run_id",run["id"]).execute().data or []
-        done=sum(1 for s in rs if s["status"]=="delivered"); total=len(rs)
-        run_stats.append({"name":run["name"],"done":done,"total":total,
-                          "pct":round(done/total*100) if total else 0,"status":run["status"]})
+    # Activity last 14 days overall
+    days_data=[]
+    day_counts=defaultdict(int)
+    for s in all_stops:
+        if s["status"]=="delivered" and s.get("created_at"):
+            day_counts[s["created_at"][:10]]+=1
+    for i in range(13,-1,-1):
+        day=(datetime.now()-timedelta(days=i)).strftime("%Y-%m-%d")
+        label=(datetime.now()-timedelta(days=i)).strftime("%b %d")
+        days_data.append({"date":label,"count":day_counts.get(day,0)})
 
     return render_template("analytics.html", d={
         "cname":cname,"cid":campaign_id,
         "total_csts":total_csts,"total_placed":total_placed,
         "total_pending":total_csts-total_placed,"pct_complete":pct_complete,
+        "total_missing":total_missing,
         "total_runs":len(all_runs),"total_photos":len(all_photos),
-        "sign_requests":sum(1 for a in all_csts if a.get("sign_requested")),
         "days_data":days_data,"leaderboard":leaderboard,
-        "party_counts":dict(party_counts),"score_counts":dict(score_counts),
-        "run_stats":run_stats,
+        "mission_types":MISSION_TYPES,
+        "service_stats":service_stats,
+        "run_stats": sorted([{
+            "name":r["name"],"done":r.get("done_count",0),"total":r.get("total_stops",0),
+            "pct":round(r.get("done_count",0)/r.get("total_stops",1)*100) if r.get("total_stops") else 0,
+            "status":r["status"],"run_type":r.get("run_type","general")
+        } for r in all_runs], key=lambda x:-x["pct"])[:20],
     })
 
 # ══════════════════════════════════════════════════════════════════════════════
