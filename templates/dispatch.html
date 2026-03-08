@@ -209,6 +209,35 @@ function onTypeChange(type){
 // Init first card as selected
 document.querySelectorAll('.dispatch-type-card')[0]?.classList.add('selected');
 
+// ── Turf prefill ────────────────────────────────────────
+(function(){
+  const prefillVol  = "{{ prefill_vol_id | default('') }}";
+  const prefillCsts = {{ prefill_cst_ids | default('[]') }};
+  const prefillType = "{{ prefill_run_type | default('') }}";
+  if(prefillType){
+    const card = document.querySelector(`.dispatch-type-card[data-type="${prefillType}"]`);
+    if(card){ card.querySelector('input[type=radio]').checked=true; onTypeChange(prefillType); }
+  }
+  if(prefillVol){
+    const cb = document.querySelector(`input[name="selected_vols"][value="${prefillVol}"]`);
+    if(cb) cb.checked = true;
+  }
+  if(prefillCsts.length){
+    prefillCsts.forEach(id=>{
+      const cb = document.querySelector(`input[name="selected_addrs"][value="${id}"]`);
+      if(cb){ cb.checked=true; cb.closest('.addr-item').style.display=''; }
+    });
+    updateSummary();
+    sortVolsByProximity();
+    // Show banner
+    const banner = document.createElement('div');
+    banner.className='alert alert-info';
+    banner.style.cssText='margin-bottom:16px';
+    banner.innerHTML=`<strong>Turf loaded</strong> — ${prefillCsts.length} addresses pre-selected from turf. Review and adjust as needed.`;
+    document.querySelector('.card')?.before(banner);
+  }
+})();
+
 function haversine(lat1,lng1,lat2,lng2){
   const R=6371,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
   const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
