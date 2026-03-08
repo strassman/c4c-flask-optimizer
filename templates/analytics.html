@@ -40,16 +40,65 @@
 {% endblock %}
 {% block content %}
 
-<!-- ── Overall top stats ─────────────────────────────────────── -->
-<div class="stat-row">
+<!-- ── Contextual top stats (swaps per tab) ───────────────────── -->
+<div class="stat-row" id="top-stats">
   <div class="stat-card"><div class="stat-label">Total Voters</div><div class="stat-value blue">{{ "{:,}".format(d.total_csts) }}</div></div>
-  <div class="stat-card"><div class="stat-label">Placed</div><div class="stat-value green">{{ "{:,}".format(d.total_placed) }}</div></div>
-  <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value orange">{{ "{:,}".format(d.total_pending) }}</div></div>
-  <div class="stat-card"><div class="stat-label">Missing</div><div class="stat-value red">{{ "{:,}".format(d.total_missing) }}</div></div>
-  <div class="stat-card"><div class="stat-label">Total Runs</div><div class="stat-value">{{ d.total_runs }}</div></div>
-  <div class="stat-card"><div class="stat-label">Photos</div><div class="stat-value">{{ d.total_photos }}</div></div>
-  <div class="stat-card"><div class="stat-label">% Complete</div><div class="stat-value {% if d.pct_complete==100 %}green{% elif d.pct_complete>50 %}blue{% else %}orange{% endif %}">{{ d.pct_complete }}%</div></div>
+  <div class="stat-card" id="stat-a"><div class="stat-label" id="stat-a-label">Placed</div><div class="stat-value green" id="stat-a-val">{{ "{:,}".format(d.total_placed) }}</div></div>
+  <div class="stat-card" id="stat-b"><div class="stat-label" id="stat-b-label">Pending</div><div class="stat-value orange" id="stat-b-val">{{ "{:,}".format(d.total_pending) }}</div></div>
+  <div class="stat-card" id="stat-c"><div class="stat-label" id="stat-c-label">Missing</div><div class="stat-value red" id="stat-c-val">{{ "{:,}".format(d.total_missing) }}</div></div>
+  <div class="stat-card" id="stat-d"><div class="stat-label" id="stat-d-label">Total Runs</div><div class="stat-value" id="stat-d-val">{{ d.total_runs }}</div></div>
+  <div class="stat-card" id="stat-e"><div class="stat-label" id="stat-e-label">Photos</div><div class="stat-value" id="stat-e-val">{{ d.total_photos }}</div></div>
+  <div class="stat-card" id="stat-f"><div class="stat-label" id="stat-f-label">% Complete</div><div class="stat-value" id="stat-f-val">{{ d.pct_complete }}%</div></div>
 </div>
+
+<!-- Stat data per service embedded as JSON -->
+<script>
+const SERVICE_STATS = {{ d.service_stats | tojson }};
+const OVERALL_STATS = {
+  a: { label:'Placed',      val:'{{ "{:,}".format(d.total_placed) }}',  color:'green'  },
+  b: { label:'Pending',     val:'{{ "{:,}".format(d.total_pending) }}', color:'orange' },
+  c: { label:'Missing',     val:'{{ "{:,}".format(d.total_missing) }}', color:'red'    },
+  d: { label:'Total Runs',  val:'{{ d.total_runs }}',                   color:''       },
+  e: { label:'Photos',      val:'{{ d.total_photos }}',                 color:''       },
+  f: { label:'% Complete',  val:'{{ d.pct_complete }}%',                color:'{{ "green" if d.pct_complete==100 else "blue" if d.pct_complete>50 else "orange" }}' },
+};
+
+const SERVICE_LABELS = {
+  sign_delivery: { done:'Signs Placed',    pending:'Not Yet Placed',  c:'Missing Signs',  pct:'Placement Rate' },
+  lit_drop:      { done:'Doors Hit',       pending:'Doors Remaining', c:'Runs',           pct:'Completion Rate' },
+  door_knock:    { done:'Doors Knocked',   pending:'Doors Remaining', c:'Contacts Made',  pct:'Completion Rate' },
+  sign_recovery: { done:'Signs Recovered', pending:'Still Out',       c:'Recovery Runs',  pct:'Recovery Rate' },
+  gotv:          { done:'Voters Reached',  pending:'Not Yet Reached', c:'GOTV Runs',      pct:'Contact Rate' },
+  general:       { done:'Stops Done',      pending:'Stops Remaining', c:'Total Runs',     pct:'Completion Rate' },
+};
+
+function setStats(a, b, c, d, e, f){
+  ['a','b','c','d','e','f'].forEach(k=>{
+    const s = {a,b,c,d,e,f}[k];
+    document.getElementById(`stat-${k}-label`).textContent = s.label;
+    document.getElementById(`stat-${k}-val`).textContent   = s.val;
+    document.getElementById(`stat-${k}-val`).className     = `stat-value ${s.color||''}`;
+  });
+}
+
+function updateStats(serviceId){
+  if(serviceId === 'overview'){
+    setStats(OVERALL_STATS.a, OVERALL_STATS.b, OVERALL_STATS.c, OVERALL_STATS.d, OVERALL_STATS.e, OVERALL_STATS.f);
+    return;
+  }
+  const ss = SERVICE_STATS[serviceId] || {};
+  const lbl = SERVICE_LABELS[serviceId] || SERVICE_LABELS.general;
+  const pct = ss.pct || 0;
+  setStats(
+    { label: lbl.done,    val: ss.done  || 0,              color: 'green'  },
+    { label: lbl.pending, val: (ss.stops||0)-(ss.done||0), color: 'orange' },
+    { label: lbl.c,       val: ss.runs  || 0,              color: ''       },
+    { label: 'Total Stops',val: ss.stops || 0,             color: 'blue'   },
+    { label: lbl.pct,     val: pct+'%',                    color: pct===100?'green':pct>50?'blue':'orange' },
+    { label: 'Volunteers',val: (ss.leaderboard||[]).length, color: ''      },
+  );
+}
+</script>
 
 <!-- ── Mission type selector ─────────────────────────────────── -->
 <div class="mission-tabs">
@@ -283,6 +332,7 @@ window.switchService = function(id, btn){
   document.querySelectorAll('.mission-tab').forEach(b=>b.classList.remove('active'));
   document.getElementById('panel-'+id).classList.add('active');
   btn.classList.add('active');
+  updateStats(id);
   // Load constituent tables if this is a service panel
   if(id !== 'overview'){
     const doneEl = document.getElementById(`done-table-${id}`);
