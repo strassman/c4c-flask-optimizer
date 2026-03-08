@@ -146,10 +146,8 @@
 {% for a in d.addrs %}{% if a.email %}{% set _ = all_emails.append(a.email) %}{% endif %}{% if a.phone %}{% set _ = all_phones.append(a.phone) %}{% endif %}{% endfor %}
 
 <div class="section-header">
-  <h2 style="margin:0">All Constituents — {{ d.addrs|length }}</h2>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    {% if all_emails %}<a href="mailto:{{ all_emails|join(',') }}" class="btn btn-primary btn-sm">📧 Email All</a>{% endif %}
-    {% if all_phones %}<a href="sms:{{ all_phones|join(',') }}" class="btn btn-success btn-sm">💬 Text All</a>{% endif %}
+  <h2 style="margin:0">All Constituents — {{ total|default(d.addrs|length) | int | format_number if total is defined else d.addrs|length }} total</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     {% if d.addrs %}
     <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export</a>
     <form method="POST" onsubmit="return confirm('Delete ALL?')" style="display:inline">
@@ -160,10 +158,18 @@
   </div>
 </div>
 {% if d.addrs %}
-<div class="search-bar">
-  <input type="text" id="all-search" placeholder="Search name, address, party, tags, precinct..." oninput="filterTable('all-search','all-tbody','all-count')">
+<div class="search-bar" style="display:flex;gap:8px;align-items:center">
+  <form method="GET" action="/constituents" style="display:flex;gap:8px;flex:1">
+    <input type="text" name="q" value="{{ search|default('') }}" placeholder="Search address, name, party, precinct…" style="flex:1;margin:0">
+    <button class="btn btn-secondary btn-sm" type="submit">Search</button>
+    {% if search %}<a href="/constituents" class="btn btn-secondary btn-sm">✕ Clear</a>{% endif %}
+  </form>
 </div>
-<p class="tbl-count" id="all-count"></p>
+<p class="tbl-count" id="all-count">
+  Showing {{ d.addrs|length }} of {{ total|default(d.addrs|length) }} 
+  {% if search %}matching "{{ search }}"{% endif %}
+  — Page {{ page|default(1) }} of {{ total_pages|default(1) }}
+</p>
 <div class="tbl-wrap">
   <table class="tbl">
     <thead><tr><th>Name</th><th>Address</th><th>Party</th><th>Score</th><th>Tags</th><th>Status</th><th></th></tr></thead>
