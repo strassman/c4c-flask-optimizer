@@ -1356,36 +1356,166 @@ def analytics():
 @login_required
 def outreach():
     campaign_id=cid(); cname=session.get("cname","Campaign")
-    active_run_id=session.get("active_run_id")
-    if not active_run_id:
-        runs=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data
-        active_run_id=runs[0]["id"] if runs else None
+
+    # Load all runs so the user can switch between them
+    all_runs=sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
+    active_run_id=request.args.get("run_id") or session.get("active_run_id")
+    if not active_run_id and all_runs:
+        active_run_id=all_runs[0]["id"]
+    active_run=next((r for r in all_runs if r["id"]==active_run_id), None)
+
+    # Service-aware copy
+    SERVICE_COPY = {
+        "sign_delivery": {
+            "label":    "Yard Sign Delivery",
+            "subj":     f"{cname} — Your Yard Sign Delivery Route",
+            "greeting": "You're signed up to deliver yard signs for {cname} today.",
+            "instructions": (
+                "At each stop, place the sign in a visible spot in the front yard — "
+                "ideally near the curb. Please take a photo of each placed sign through "
+                "your delivery link so we can confirm placement. If no one is home, "
+                "you can still place the sign unless the property is clearly gated or posted."
+            ),
+            "cta":      "Use the link below to check in at each stop and upload your photos:",
+            "sms_action": "delivering yard signs",
+        },
+        "lit_drop": {
+            "label":    "Literature Drop",
+            "subj":     f"{cname} — Your Lit Drop Route",
+            "greeting": "You're signed up for a literature drop for {cname} today.",
+            "instructions": (
+                "At each stop, place campaign literature in the door or mailbox slot. "
+                "No need to knock — just leave the materials and move on. Try to cover "
+                "every address on your list. Skip any properties with 'No Soliciting' signs."
+            ),
+            "cta":      "Use the link below to track your progress and check in at each stop:",
+            "sms_action": "dropping campaign literature",
+        },
+        "door_knock": {
+            "label":    "Door Knocking",
+            "subj":     f"{cname} — Your Canvassing Route",
+            "greeting": "You're signed up to canvass for {cname} today.",
+            "instructions": (
+                "Knock on each door and introduce yourself as a volunteer for {cname}. "
+                "If someone answers, have a brief conversation — ask about their top issues "
+                "and share why you support the campaign. Record the result of each contact "
+                "through your canvassing link. If no one answers, mark it as no contact."
+            ),
+            "cta":      "Use the link below to log each door and record contact results:",
+            "sms_action": "canvassing",
+        },
+        "sign_recovery": {
+            "label":    "Sign Recovery",
+            "subj":     f"{cname} — Sign Recovery Route",
+            "greeting": "You're signed up to help recover campaign signs for {cname} today.",
+            "instructions": (
+                "Each stop on your list had a yard sign placed previously. Please visit "
+                "each address and retrieve the sign if it's damaged, missing, or the "
+                "homeowner has requested removal. Handle signs carefully for reuse. "
+                "Mark each stop as complete through your link once you've visited."
+            ),
+            "cta":      "Use the link below to check in at each stop:",
+            "sms_action": "recovering campaign signs",
+        },
+        "gotv": {
+            "label":    "Get Out The Vote",
+            "subj":     f"{cname} — Your GOTV Assignment",
+            "greeting": "You're part of the GOTV push for {cname} — thank you!",
+            "instructions": (
+                "Your job today is to make sure supporters get to the polls. Contact each "
+                "person on your list, remind them of their polling location and hours, and "
+                "offer assistance if needed. Every contact matters — please log each "
+                "interaction through your link so we can track turnout in real time."
+            ),
+            "cta":      "Use the link below to log each contact and track your progress:",
+            "sms_action": "working GOTV",
+        },
+        "general": {
+            "label":    "Volunteer Dispatch",
+            "subj":     f"{cname} — Your Volunteer Assignment",
+            "greeting": "You have a volunteer assignment from {cname} today.",
+            "instructions": (
+                "Please visit each stop on your list and complete your assigned task. "
+                "Use your volunteer link to check in at each location and mark stops complete."
+            ),
+            "cta":      "Use the link below to access your route:",
+            "sms_action": "volunteering",
+        },
+    }
+
+    run_type = active_run.get("run_type","general") if active_run else "general"
+    copy = SERVICE_COPY.get(run_type, SERVICE_COPY["general"])
+
     emails=[]
     if active_run_id:
         tokens=sanitize(db().table("vol_tokens").select("*").eq("run_id",active_run_id).execute().data or [])
         for tok in tokens:
-            stops=db().table("run_stops").select("*")\
+            stops=sanitize(db().table("run_stops").select("*")\
                       .eq("run_id",active_run_id).eq("volunteer_name",tok["volunteer_name"])\
-                      .order("stop_order").execute().data or []
+                      .order("stop_order").execute().data or [])
             vr=sanitize(db().table("volunteers").select("*").eq("id",tok.get("volunteer_id","")).execute().data or [])
             vol=vr[0] if vr else {"name":tok["volunteer_name"],"email":"","phone":"","address":""}
-            body="\n".join([f"Hi {vol['name']},",f"\nThank you for volunteering for {cname}!",
-                            f"\nYou have {len(stops)} stop{'s' if len(stops)!=1 else ''}:\n"]+
-                           [f"  Stop {i+1}: {s['address']}\n  Directions: {gmaps_url(vol.get('address',''), s['address'])}" for i,s in enumerate(stops)]+
-                           [f"\nThank you!\n{cname} Team"])
-            subj=f"{cname} - Your Yard Sign Delivery Route"
+
             share_url=request.host_url.rstrip("/")+url_for("vol_deliver",run_id=active_run_id,vol_token=tok["token"])
+
+            # Build stop list with directions
+            stop_lines=[]
+            for i,s in enumerate(stops):
+                directions=gmaps_url(vol.get("address",""),s["address"])
+                stop_lines.append(f"  Stop {i+1}: {s['address']}\n  Directions: {directions}")
+
+            greeting = copy["greeting"].format(cname=cname)
+            instructions = copy["instructions"].format(cname=cname)
+            run_name = active_run.get("name","") if active_run else ""
+
+            body="\n".join([
+                f"Hi {vol['name']},",
+                f"",
+                greeting,
+                f"",
+                f"Run: {run_name}" if run_name else "",
+                f"Stops assigned: {len(stops)}",
+                f"",
+                instructions,
+                f"",
+                f"{copy['cta']}",
+                f"{share_url}",
+                f"",
+                f"Your stops:",
+            ] + stop_lines + [
+                f"",
+                f"Questions? Reply to this email or text back.",
+                f"",
+                f"Thank you for your time and effort!",
+                f"— {cname} Campaign Team",
+            ])
+            # Clean up blank lines that were conditionally empty
+            body="\n".join(line for line in body.split("\n") if line or True)
+
+            subj = copy["subj"]
+            if run_name: subj += f" — {run_name}"
+
             vp=(vol.get("phone","") or "").translate(str.maketrans("","","- ()"))
-            stops_txt="\n".join([f"  {i+1}. {s['address'].split(',')[0]}" for i,s in enumerate(stops)])
-            txt=f"Hi {vol['name']}! {cname} here. {len(stops)} stop{'s' if len(stops)!=1 else ''} today:\n{stops_txt}\nDelivery link: {share_url}"
+            n=len(stops)
+            stops_short=", ".join([s["address"].split(",")[0] for s in stops[:3]])
+            if n>3: stops_short+=f" +{n-3} more"
+            txt=(f"Hi {vol['name']}! {cname} here — you're {copy['sms_action']} today. "
+                 f"{n} stop{'s' if n!=1 else ''}: {stops_short}. "
+                 f"Your route link: {share_url} "
+                 f"Reply STOP to opt out.")
+
             emails.append({
                 "volunteer":vol,"body":body,"subj":subj,"share_url":share_url,
+                "txt":txt,"stops":stops,"run_name":run_name,
                 "mailto":f"mailto:{vol.get('email','')}?"+urllib.parse.urlencode({"subject":subj,"body":body}) if vol.get("email") else "",
                 "sms":f"sms:{vp}&body={urllib.parse.quote(txt)}" if vp else "",
-                "txt":txt,
             })
-    return render_template("emails.html",d={"cname":cname,"cid":campaign_id},emails=emails,
-                           bulk_mailto="",bulk_sms="",
+
+    return render_template("emails.html",
+                           d={"cname":cname,"cid":campaign_id},
+                           emails=emails, all_runs=all_runs,
+                           active_run=active_run, run_type=run_type,
+                           service_label=copy["label"],
                            all_em_count=len([e for e in emails if e["volunteer"].get("email")]),
                            all_ph_count=len([e for e in emails if e["volunteer"].get("phone")]))
 
