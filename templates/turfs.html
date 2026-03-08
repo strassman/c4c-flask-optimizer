@@ -63,12 +63,19 @@
       </div>
       <div>
         <div class="section-label">Assign Volunteer</div>
-        <select name="volunteer_id" style="width:100%">
-          <option value="">— Unassigned —</option>
-          {% for v in d.vols %}
-          <option value="{{ v.id }}">{{ v.name }}</option>
-          {% endfor %}
-        </select>
+        <div style="display:flex;gap:6px">
+          <select name="volunteer_id" id="vol-select" style="flex:1">
+            <option value="">— Unassigned —</option>
+            {% for v in d.vols %}
+            <option value="{{ v.id }}">{{ v.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="suggestVol()" data-tip="Auto-suggest closest volunteer based on precinct location">
+            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:3px"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l2.5 2.5"/></svg>
+            Suggest
+          </button>
+        </div>
+        <div id="vol-suggest-msg" style="font-size:11px;color:var(--green);margin-top:4px;display:none"></div>
       </div>
     </div>
 
@@ -307,6 +314,29 @@ function selectColor(el){
   document.querySelectorAll('.color-swatch').forEach(s=>s.classList.remove('selected'));
   el.classList.add('selected');
   document.getElementById('color-input').value = el.dataset.color;
+}
+async function suggestVol(){
+  const precincts = [...selectedPrecs];
+  if(!precincts.length){ alert('Select at least one precinct first.'); return; }
+  const btn = event.target.closest('button');
+  const orig = btn.innerHTML; btn.innerHTML = '…'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/turf/suggest-volunteer', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({precinct_ids: precincts})
+    });
+    const d = await r.json();
+    if(d.volunteer){
+      const sel = document.getElementById('vol-select');
+      sel.value = d.volunteer.id;
+      const msg = document.getElementById('vol-suggest-msg');
+      msg.textContent = `Suggested: ${d.volunteer.name} (closest to turf center)`;
+      msg.style.display = 'block';
+    } else {
+      alert('No volunteers with addresses found. Add volunteer addresses first.');
+    }
+  } catch(e){ alert('Error suggesting volunteer.'); }
+  btn.innerHTML = orig; btn.disabled = false;
 }
 </script>
 {% endblock %}
