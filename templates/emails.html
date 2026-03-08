@@ -1,69 +1,159 @@
 {% extends "base.html" %}
-{% block title %}Emails & Texts{% endblock %}
+{% block title %}Outreach{% endblock %}
+{% block extra_head %}
+<style>
+.run-selector{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.run-pill{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:500;text-decoration:none;transition:all .15s;white-space:nowrap}
+.run-pill:hover{border-color:var(--border2);color:var(--text)}
+.run-pill.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.run-pill .pill-type{font-size:10px;opacity:.7;margin-left:4px}
+.vol-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.vol-card-header{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;user-select:none}
+.vol-card-header:hover{background:var(--surface3)}
+.vol-avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}
+.vol-card-body{padding:16px;border-top:1px solid var(--border);display:none}
+.vol-card.open .vol-card-body{display:block}
+.vol-card.open .chevron{transform:rotate(180deg)}
+.chevron{transition:transform .2s;color:var(--text3)}
+.msg-tabs{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px}
+.msg-tab{flex:1;padding:7px;font-size:12px;font-weight:600;text-align:center;cursor:pointer;background:var(--surface3);color:var(--text2);border:none;font-family:inherit;transition:all .15s}
+.msg-tab.active{background:var(--surface2);color:var(--text)}
+.msg-tab:first-child{border-right:1px solid var(--border)}
+.msg-panel{display:none}.msg-panel.active{display:block}
+.msg-preview{width:100%;min-height:160px;font-size:12px;font-family:'DM Mono',monospace;background:var(--surface3);color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:12px;resize:vertical;line-height:1.6}
+.stop-row{display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px}
+.stop-row:last-child{border:none}
+.stop-num{width:20px;font-weight:700;color:var(--text3);flex-shrink:0;text-align:center}
+.stop-addr{flex:1;color:var(--text2)}
+.service-banner{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:10px;background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.2);margin-bottom:20px}
+.section-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin-bottom:8px}
+</style>
+{% endblock %}
 {% block content %}
-<h1>📧 Emails & Texts</h1>
-<p class="subtitle">Send route details to your volunteers</p>
 
-{% if not emails %}
-<div class="alert alert-info">Run the optimizer on the 🚐 Delivery Run page first.</div>
-{% else %}
-
-<!-- Bulk buttons -->
-<div class="card">
-  <div class="card-title">Send to All Volunteers</div>
-  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-    {% if bulk_mailto %}
-    <a href="{{ bulk_mailto }}" class="btn btn-primary">
-      📧 Email All Volunteers <span style="opacity:.7;font-size:12px">({{ all_em_count }})</span>
-    </a>
-    {% else %}
-    <span style="color:#888;font-size:13px">No emails on file</span>
-    {% endif %}
-    {% if bulk_sms %}
-    <a href="{{ bulk_sms }}" class="btn btn-success">
-      💬 Text All Volunteers <span style="opacity:.7;font-size:12px">({{ all_ph_count }})</span>
-    </a>
-    {% else %}
-    <span style="color:#888;font-size:13px">No phones on file</span>
-    {% endif %}
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+  <div>
+    <h1 style="margin-bottom:4px">Outreach</h1>
+    <p class="subtitle">Send route details and mission instructions to your volunteers</p>
   </div>
 </div>
 
-<hr class="divider">
+{% if not all_runs %}
+<div class="alert alert-info">No dispatch runs yet. Create a run from the Dispatch page first.</div>
+{% else %}
 
-<!-- Per volunteer -->
+<div class="run-selector">
+  {% for run in all_runs %}
+  <a href="/outreach?run_id={{ run.id }}" class="run-pill {% if active_run and run.id==active_run.id %}active{% endif %}">
+    {{ run.name }}
+    <span class="pill-type">{{ (run.get('run_type','general') or 'general')|replace('_',' ')|title }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+{% if not emails %}
+<div class="alert alert-info">No volunteers dispatched on this run yet.</div>
+{% else %}
+
+{% if active_run %}
+<div class="service-banner">
+  <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 7l8 5 8-5"/></svg>
+  <div>
+    <div style="font-size:13px;font-weight:600">{{ service_label }} — {{ active_run.name }}</div>
+    <div style="font-size:12px;color:var(--text3)">Messages customized for this mission type &middot; {{ all_em_count }} email{{ 's' if all_em_count!=1 else '' }} &middot; {{ all_ph_count }} text{{ 's' if all_ph_count!=1 else '' }}</div>
+  </div>
+</div>
+{% endif %}
+
 {% for e in emails %}
 {% set v = e.volunteer %}
-<details open style="margin-bottom:12px">
-  <summary>
-    <strong>{{ v.name }}</strong>
-    <span style="color:#888;font-size:12px;margin-left:8px">{{ v.email or 'no email' }} · {{ v.phone or 'no phone' }}</span>
-  </summary>
-  <div class="detail-body" style="padding-top:12px">
-    <div class="grid2" style="margin-bottom:12px">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px">📧 Email</div>
-        {% if e.mailto %}
-        <a href="{{ e.mailto }}" class="btn btn-primary">Open in Mail App</a>
-        <div style="font-size:12px;color:#888;margin-top:4px">To: {{ v.email }}</div>
-        {% else %}
-        <span style="color:#888;font-size:13px">No email on file</span>
-        {% endif %}
-      </div>
-      <div>
-        <div style="font-size:13px;font-weight:600;color:#aaa;margin-bottom:8px">💬 Text</div>
-        {% if e.sms %}
-        <a href="{{ e.sms }}" class="btn btn-success">Open in Messages</a>
-        <div style="font-size:12px;color:#888;margin-top:4px">To: {{ v.phone }}</div>
-        {% else %}
-        <span style="color:#888;font-size:13px">No phone on file</span>
-        {% endif %}
+{% set initials = (v.name or '?').split()[0][0]|upper + ((v.name or '?').split()[1][0]|upper if (v.name or '').split()|length > 1 else '') %}
+<div class="vol-card" id="vc-{{ loop.index }}">
+  <div class="vol-card-header" onclick="toggleCard('vc-{{ loop.index }}')">
+    <div class="vol-avatar">{{ initials }}</div>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:14px;font-weight:600">{{ v.name }}</div>
+      <div style="font-size:12px;color:var(--text3)">
+        {{ e.stops|length }} stop{{ 's' if e.stops|length!=1 else '' }}{% if v.email %} &middot; {{ v.email }}{% endif %}{% if v.phone %} &middot; {{ v.phone }}{% endif %}
       </div>
     </div>
-    <div style="font-size:12px;font-weight:500;color:#aaa;margin-bottom:6px">Email Preview:</div>
-    <textarea style="width:100%;height:180px;font-size:12px;font-family:monospace;background:#0f1117;color:#aaa;border:1px solid #2d3148;border-radius:6px;padding:10px;resize:vertical" readonly>{{ e.body }}</textarea>
+    <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+      {% if e.mailto %}
+      <a href="{{ e.mailto }}" class="btn btn-primary btn-sm" onclick="event.stopPropagation()" data-tip="Open in Mail app">
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:3px"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 7l8 5 8-5"/></svg>Email
+      </a>
+      {% endif %}
+      {% if e.sms %}
+      <a href="{{ e.sms }}" class="btn btn-success btn-sm" onclick="event.stopPropagation()" data-tip="Open in Messages app">
+        <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:3px"><path d="M18 10c0 3.9-3.6 7-8 7a9 9 0 01-3.4-.7L2 18l1.7-4.1A6.5 6.5 0 012 10c0-3.9 3.6-7 8-7s8 3.1 8 7z"/></svg>Text
+      </a>
+      {% endif %}
+      <svg class="chevron" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5,8 10,13 15,8"/></svg>
+    </div>
   </div>
-</details>
+
+  <div class="vol-card-body">
+    <div class="section-label">Stops ({{ e.stops|length }})</div>
+    <div style="margin-bottom:16px">
+      {% for s in e.stops %}
+      <div class="stop-row">
+        <div class="stop-num">{{ loop.index }}</div>
+        <div class="stop-addr">{{ s.address }}</div>
+        <a href="https://maps.google.com/?q={{ s.address|urlencode }}" target="_blank" style="font-size:11px;color:var(--accent);flex-shrink:0">
+          <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:2px"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg>Map
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="section-label">Message Preview</div>
+    <div class="msg-tabs">
+      <button class="msg-tab active" onclick="switchMsg({{ loop.index }},'email',this)">
+        <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:3px"><rect x="2" y="5" width="16" height="12" rx="2"/><path d="M2 7l8 5 8-5"/></svg>Email
+      </button>
+      <button class="msg-tab" onclick="switchMsg({{ loop.index }},'sms',this)">
+        <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" style="margin-right:3px"><path d="M18 10c0 3.9-3.6 7-8 7a9 9 0 01-3.4-.7L2 18l1.7-4.1A6.5 6.5 0 012 10c0-3.9 3.6-7 8-7s8 3.1 8 7z"/></svg>Text
+      </button>
+    </div>
+
+    <div id="mp-email-{{ loop.index }}" class="msg-panel active">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Subject: <span style="color:var(--text2)">{{ e.subj }}</span></div>
+      <textarea class="msg-preview" readonly>{{ e.body }}</textarea>
+    </div>
+    <div id="mp-sms-{{ loop.index }}" class="msg-panel">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+        {{ e.txt|length }} characters
+        {% if e.txt|length > 160 %}<span style="color:var(--orange)"> &middot; {{ ((e.txt|length) / 160)|int + 1 }} SMS segments</span>{% endif %}
+      </div>
+      <textarea class="msg-preview" style="min-height:90px" readonly>{{ e.txt }}</textarea>
+    </div>
+
+    <div style="margin-top:12px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;color:var(--text3);flex-shrink:0">Volunteer link:</span>
+      <code style="font-size:11px;color:var(--accent);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ e.share_url }}</code>
+      <button class="btn btn-secondary btn-sm" onclick="copyLink('{{ e.share_url }}',this)" data-tip="Copy to clipboard">Copy</button>
+    </div>
+  </div>
+</div>
 {% endfor %}
+
 {% endif %}
+{% endif %}
+
+<script>
+function toggleCard(id){ document.getElementById(id).classList.toggle('open'); }
+function switchMsg(idx, tab, btn){
+  ['email','sms'].forEach(t=>document.getElementById(`mp-${t}-${idx}`).classList.remove('active'));
+  document.getElementById(`mp-${tab}-${idx}`).classList.add('active');
+  btn.closest('.msg-tabs').querySelectorAll('.msg-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function copyLink(url, btn){
+  navigator.clipboard.writeText(url).then(()=>{
+    const orig=btn.textContent; btn.textContent='Copied!';
+    setTimeout(()=>btn.textContent=orig, 2000);
+  });
+}
+document.querySelector('.vol-card')?.classList.add('open');
+</script>
 {% endblock %}
