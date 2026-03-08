@@ -149,7 +149,7 @@
   <h2 style="margin:0">All Constituents — {{ "{:,}".format(total|default(d.addrs|length)|int) }} total</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
     {% if d.addrs %}
-    <a href="/constituents/export" class="btn btn-secondary btn-sm">⬇️ Export</a>
+    <a href="/constituents/export" data-tip="Download all constituents as CSV" class="btn btn-secondary btn-sm">⬇️ Export</a>
     <form method="POST" onsubmit="return confirm('Delete ALL?')" style="display:inline">
       <input type="hidden" name="action" value="clear_all">
       <button class="btn btn-danger btn-sm">🗑️ Clear All</button>
