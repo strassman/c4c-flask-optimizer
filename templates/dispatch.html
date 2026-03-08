@@ -183,15 +183,24 @@ function onTypeChange(type){
   const cfg = TYPE_CONFIG[type] || TYPE_CONFIG.sign_delivery;
   document.getElementById('addr-panel-title').textContent = cfg.addrTitle;
 
-  // Show notes card for general + door_knock
+  // Show/hide addresses based on the mission filter
+  document.querySelectorAll('.addr-item').forEach(item=>{
+    const visible = cfg.addrFilter(item);
+    item.style.display = visible ? '' : 'none';
+    // Uncheck hidden items so they don't get dispatched
+    if(!visible) item.querySelector('input[type=checkbox]').checked = false;
+  });
+  updateSummary();
+
+  // Show notes card for general + door_knock + gotv
   const notesCard = document.getElementById('notes-card');
   notesCard.style.display = (type==='general'||type==='door_knock'||type==='gotv') ? '' : 'none';
 
-  // For sign_recovery, auto-check missing sign addresses
+  // For sign_recovery, auto-check all visible (delivered) addresses
   if(type==='sign_recovery'){
     document.querySelectorAll('.addr-item').forEach(item=>{
-      const cb = item.querySelector('input[type=checkbox]');
-      cb.checked = item.textContent.includes('⚠️');
+      if(item.style.display !== 'none')
+        item.querySelector('input[type=checkbox]').checked = true;
     });
     updateSummary();
   }
@@ -237,9 +246,12 @@ function updateSummary(){
 function filterVols(q){q=q.toLowerCase();document.querySelectorAll('.vol-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});}
 function filterAddrs(q){
   q=q.toLowerCase();
+  const activeType = document.querySelector('.dispatch-type-card.selected')?.dataset.type || 'sign_delivery';
+  const cfg = TYPE_CONFIG[activeType] || TYPE_CONFIG.sign_delivery;
   document.querySelectorAll('.addr-item').forEach(el=>{
     const textMatch = el.textContent.toLowerCase().includes(q);
-    el.style.display = textMatch ? '' : 'none';
+    const missionMatch = cfg.addrFilter(el);
+    el.style.display = (textMatch && missionMatch) ? '' : 'none';
   });
   updateSummary();
 }
