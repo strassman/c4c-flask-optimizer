@@ -245,6 +245,66 @@ input[type=radio] { accent-color: var(--accent); cursor: pointer; }
 .btn-sm        { padding: 5px 12px; font-size: 12px; border-radius: 6px; }
 .btn-lg        { padding: 11px 24px; font-size: 15px; border-radius: 10px; }
 
+/* ── Tooltips ──────────────────────────────────────────────── */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(14,17,23,0.97);
+  color: #e0e4f0;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  padding: 5px 9px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease, transform .15s ease;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 9999;
+  max-width: 200px;
+  white-space: normal;
+  text-align: center;
+}
+[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+/* Arrow */
+[data-tip]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(255,255,255,0.1);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  z-index: 9999;
+}
+[data-tip]:hover::before { opacity: 1; }
+/* Tooltip below variant */
+[data-tip-pos="below"]::after {
+  bottom: auto;
+  top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-4px);
+}
+[data-tip-pos="below"]:hover::after { transform: translateX(-50%) translateY(0); }
+[data-tip-pos="below"]::before {
+  bottom: auto;
+  top: calc(100% + 2px);
+  border-top-color: transparent;
+  border-bottom-color: rgba(255,255,255,0.1);
+}
+
 /* ── Alerts ────────────────────────────────────────────────── */
 .alert {
   padding: 11px 15px;
@@ -423,23 +483,23 @@ strong { color: var(--text); font-weight: 600; }
     RouteOps
   </div>
   <div class="nav-links">
-    <a href="/volunteers"   class="{% if request.path=='/volunteers' %}active{% endif %}">
+    <a href="/volunteers" data-tip="Manage your volunteer team"   class="{% if request.path=='/volunteers' %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="7" r="3"/><path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="15" cy="8" r="2.5"/><path d="M17.5 17c0-2.5-1.8-4.5-4-4.9"/></svg>
       Volunteers
     </a>
-    <a href="/constituents" class="{% if request.path=='/constituents' %}active{% endif %}">
+    <a href="/constituents" data-tip="Browse and search all voters" class="{% if request.path=='/constituents' %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h14M3 10h14M3 15h8"/><circle cx="16" cy="15" r="2.5"/></svg>
       Constituents
     </a>
-    <a href="/delivery-run" class="{% if request.path=='/delivery-run' %}active{% endif %}">
+    <a href="/dispatch" data-tip="Create a new delivery or canvass run" class="{% if request.path in ['/dispatch','/delivery-run'] %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
-      Delivery Run
+      Dispatch
     </a>
-    <a href="/map"          class="{% if request.path=='/map' %}active{% endif %}">
+    <a href="/map" data-tip="View all routes and placements on the map"          class="{% if request.path=='/map' %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><polygon points="1,4 7,1 13,4 19,1 19,16 13,19 7,16 1,19"/><line x1="7" y1="1" x2="7" y2="16"/><line x1="13" y1="4" x2="13" y2="19"/></svg>
       Map
     </a>
-    <a href="/routes"       class="{% if request.path=='/routes' %}active{% endif %}">
+    <a href="/routes" data-tip="View dispatch history and run archives"       class="{% if request.path=='/routes' %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg>
       Routes
     </a>
@@ -451,7 +511,7 @@ strong { color: var(--text); font-weight: 600; }
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="9" cy="9" r="5"/><line x1="14" y1="14" x2="18" y2="18"/></svg>
       Search
     </a>
-    <a href="/analytics" class="{% if request.path=='/analytics' %}active{% endif %}">
+    <a href="/analytics" data-tip="Campaign stats by mission type" class="{% if request.path=='/analytics' %}active{% endif %}">
       <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2" y="12" width="3" height="6" rx="1"/><rect x="8" y="7" width="3" height="11" rx="1"/><rect x="14" y="3" width="3" height="15" rx="1"/></svg>
       Analytics
     </a>
