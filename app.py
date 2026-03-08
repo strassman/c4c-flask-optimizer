@@ -1127,6 +1127,94 @@ def api_constituent_stats():
     except Exception as e:
         return jsonify({"total":0,"placed":0,"pending":0,"missing":0})
 
+
+
+@app.route("/api/service/constituents")
+@login_required
+def api_service_constituents():
+    """Returns constituents who have/have not received a specific service"""
+    campaign_id = cid()
+    run_type = request.args.get("run_type","sign_delivery")
+    view = request.args.get("view","done")  # done | pending
+    page = int(request.args.get("page",1))
+    per_page = 100
+    offset = (page-1)*per_page
+    try:
+        # Get all run_stops for this service type that are delivered
+        runs = db().table("runs").select("id").eq("campaign_id",campaign_id).eq("run_type",run_type).execute().data or []
+        run_ids = [r["id"] for r in runs]
+        if not run_ids:
+            return jsonify({"rows":[],"total":0,"has_more":False})
+
+        if view == "done":
+            # Constituents who have a delivered stop for this service
+            stops = db().table("run_stops")                .select("constituent_id,address,volunteer_name,created_at")                .in_("run_id", run_ids[:50])                .eq("status","delivered")                .limit(per_page).offset(offset).execute().data or []
+            # Get constituent details
+            cst_ids = list({s["constituent_id"] for s in stops if s.get("constituent_id")})
+            csts = {}
+            if cst_ids:
+                rows = db().table("constituents").select("id,first_name,last_name,address,party,support_score").in_("id",cst_ids).execute().data or []
+                csts = {r["id"]:r for r in rows}
+            result = []
+            for s in stops:
+                c = csts.get(s.get("constituent_id",""),{})
+                result.append({
+                    "id": s.get("constituent_id"),
+                    "name": f"{c.get('first_name','')} {c.get('last_name','')}".strip() or "—",
+                    "address": s.get("address") or c.get("address",""),
+                    "party": c.get("party",""),
+                    "score": c.get("support_score"),
+                    "vol": s.get("volunteer_name",""),
+                    "date": (s.get("created_at") or "")[:10],
+                    "status": "delivered",
+                })
+            return jsonify({"rows": result, "has_more": len(stops)==per_page})
+        else:
+            # Constituents who have NOT been delivered for this service
+            # Get all constituent_ids that have been delivered
+            done_stops = db().table("run_stops")                .select("constituent_id")                .in_("run_id", run_ids[:50])                .eq("status","delivered")                .limit(5000).execute().data or []
+            done_ids = {s["constituent_id"] for s in done_stops if s.get("constituent_id")}
+
+            # Get pending constituents not in done list
+            rows = db().table("constituents")                .select("id,first_name,last_name,address,party,support_score,status")                .eq("campaign_id",campaign_id)                .limit(per_page).offset(offset).execute().data or []
+            result = []
+            for c in rows:
+                if c["id"] in done_ids: continue
+                result.append({
+                    "id": c["id"],
+                    "name": f"{c.get('first_name','')} {c.get('last_name','')}".strip() or "—",
+                    "address": c.get("address",""),
+                    "party": c.get("party",""),
+                    "score": c.get("support_score"),
+                    "status": c.get("status","pending"),
+                })
+            return jsonify({"rows": result, "has_more": len(rows)==per_page})
+    except Exception as e:
+        print(f"api_service_constituents error: {e}", flush=True)
+        return jsonify({"rows":[],"has_more":False})
+
+@app.route("/api/constituent/status", methods=["POST"])
+@login_required
+def api_constituent_status():
+    campaign_id = cid()
+    data = request.get_json() or {}
+    cst_id = data.get("id")
+    status = data.get("status")  # "delivered" or "pending"
+    if not cst_id or status not in ("delivered","pending"):
+        return jsonify({"ok": False, "error": "invalid params"})
+    try:
+        update = {"status": status}
+        if status == "delivered":
+            update["delivered_date"] = datetime.now().strftime("%b %d")
+            update["delivered_by"] = session.get("cname","")
+        else:
+            update["delivered_date"] = None
+            update["delivered_by"] = None
+        db().table("constituents").update(update).eq("id", cst_id).eq("campaign_id", campaign_id).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ANALYTICS
 # ══════════════════════════════════════════════════════════════════════════════
