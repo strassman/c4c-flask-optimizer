@@ -128,7 +128,7 @@
           <input type="text" name="tags" placeholder="yard sign, donor, volunteer">
           <label>Note</label><input type="text" name="note" placeholder="Gate code: 1234">
           <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:14px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="sign_requested" value="1"> 🪧 Sign requested</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="sign_requested" value="1"> <span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/></svg></span> Sign requested</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="volunteer_interest" value="1"> 🙋 Wants to volunteer</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;color:var(--text2);font-size:13px"><input type="checkbox" name="donor" value="1"> 💰 Donor</label>
           </div>
@@ -152,7 +152,7 @@
     <a href="/constituents/export" data-tip="Download all constituents as CSV" class="btn btn-secondary btn-sm">⬇️ Export</a>
     <form method="POST" onsubmit="return confirm('Delete ALL?')" style="display:inline">
       <input type="hidden" name="action" value="clear_all">
-      <button class="btn btn-danger btn-sm">🗑️ Clear All</button>
+      <button class="btn btn-danger btn-sm"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="4,6 16,6"/><path d="M7 6V4h6v2"/><rect x="5" y="6" width="10" height="12" rx="1"/><line x1="8" y1="10" x2="8" y2="15"/><line x1="12" y1="10" x2="12" y2="15"/></svg></span> Clear All</button>
     </form>
     {% endif %}
   </div>
@@ -180,7 +180,7 @@
       <td style="color:var(--text2);font-size:12px">{{ a.address }}</td>
       <td>{% if a.party %}<span class="badge {% if a.party=='DEM' %}badge-blue{% elif a.party=='REP' %}badge-orange{% else %}badge-gray{% endif %}">{{ a.party }}</span>{% else %}—{% endif %}</td>
       <td>{% if a.support_score %}<span style="font-weight:700;color:{% if a.support_score>=80 %}var(--green){% elif a.support_score>=50 %}var(--amber){% else %}var(--red){% endif %}">{{ a.support_score }}</span>{% else %}—{% endif %}</td>
-      <td>{% if a.status=='delivered' %}<span class="badge badge-green">✅ Placed</span>{% else %}<span class="badge badge-gray">⏳ Pending</span>{% endif %}</td>
+      <td>{% if a.status=='delivered' %}<span class="badge badge-green"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Placed</span>{% else %}<span class="badge badge-gray"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l2.5 2.5"/></svg></span> Pending</span>{% endif %}</td>
       <td onclick="event.stopPropagation()" style="white-space:nowrap">
         <form method="POST" style="display:inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="cst_id" value="{{ a.id }}"><button class="btn btn-danger btn-sm" onclick="return confirm('Delete this constituent?')">✕</button></form>
       </td>
@@ -199,7 +199,7 @@
 <div class="modal-overlay hidden" id="missing-modal" onclick="if(event.target===this)closeMissing()">
   <div class="modal" style="max-width:400px">
     <div class="modal-header">
-      <h2>🚨 Report Missing Sign</h2>
+      <h2><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff3b30" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><line x1="10" y1="6" x2="10" y2="9"/><circle cx="10" cy="11.5" r=".8" fill="currentColor"/></svg></span> Report Missing Sign</h2>
       <div class="modal-close" onclick="closeMissing()">✕</div>
     </div>
     <div class="modal-body">
@@ -298,7 +298,7 @@
         <div class="modal-section">
           <div class="modal-section-title">Engagement</div>
           <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:12px">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="sign_requested" value="1" id="mf-sign_requested"> 🪧 Sign requested</label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="sign_requested" value="1" id="mf-sign_requested"> <span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/></svg></span> Sign requested</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="volunteer_interest" value="1" id="mf-volunteer_interest"> 🙋 Volunteer interest</label>
             <label style="display:flex;align-items:center;gap:6px;cursor:pointer;margin:0;font-size:13px;color:var(--text2)"><input type="checkbox" name="donor" value="1" id="mf-donor"> 💰 Donor</label>
           </div>
