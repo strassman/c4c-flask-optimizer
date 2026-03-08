@@ -11,7 +11,7 @@
 
   <!-- Volunteers -->
   <div class="card" style="display:flex;flex-direction:column">
-    <div class="card-title">👥 Who is available today?</div>
+    <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="7" r="3"/><path d="M2 17c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="15" cy="8" r="2.5"/><path d="M17.5 17c0-2.5-1.8-4.5-4-4.9"/></svg></span> Who is available today?</div>
     {% if not d.vols %}
     <div class="alert alert-info">Add volunteers first on the Volunteers page.</div>
     {% else %}
@@ -34,7 +34,7 @@
 
   <!-- Addresses -->
   <div class="card" style="display:flex;flex-direction:column">
-    <div class="card-title">📍 Addresses for this Run</div>
+    <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2a6 6 0 016 6c0 4-6 10-6 10S4 12 4 8a6 6 0 016-6z"/><circle cx="10" cy="8" r="2"/></svg></span> Addresses for this Run</div>
     {% if not d.addrs %}
     <div class="alert alert-info">Add constituents first.</div>
     {% else %}
@@ -58,13 +58,13 @@
 
 <!-- Urgency + action buttons -->
 <div class="card">
-  <div class="card-title">⚡ Delivery Urgency</div>
+  <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><polygon points="10,2 12.4,7.5 18.5,8 14,12 15.5,18 10,15 4.5,18 6,12 1.5,8 7.6,7.5"/></svg></span> Delivery Urgency</div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:#ddd">
-      <input type="radio" name="urgency" value="today" checked> 🚗 Today — optimize full routes
+      <input type="radio" name="urgency" value="today" checked> Today — optimize full routes
     </label>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;color:#ddd">
-      <input type="radio" name="urgency" value="soon"> 📅 Sometime soon — proximity clusters
+      <input type="radio" name="urgency" value="soon"> <span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="14" y1="2" x2="14" y2="6"/></svg></span> Sometime soon — proximity clusters
     </label>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
