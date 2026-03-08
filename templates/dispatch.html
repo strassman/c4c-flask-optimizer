@@ -60,9 +60,9 @@
     {% else %}
     <div style="display:flex;gap:8px;margin:10px 0 8px;align-items:center">
       <input type="text" id="addr-search" placeholder="Filter…" oninput="filterAddrs(this.value)" style="flex:1;margin:0">
-      <button type="button" id="toggle-visited-btn" data-tip="Toggle display of already-visited addresses" class="btn btn-secondary btn-sm" onclick="toggleVisited()" data-hiding="false">🙈 Hide Visited</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()" data-tip="Select all visible addresses">All</button>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()" data-tip="Deselect all addresses">Clear</button>
+      <button type="button" id="toggle-visited-btn" data-tip="Hide/show already-visited" class="btn btn-secondary btn-sm" onclick="toggleVisited()" data-hiding="false">🙈 Hide Visited</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()">All</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
     </div>
     <div id="addr-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
     {% set type_icons = {'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪','sign_recovery':'🔄','gotv':'🗳️','general':'📋'} %}
@@ -253,6 +253,8 @@ function toggleVisited(){
   updateSummary();
 }
 function selectAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>{if(cb.closest('.addr-item').style.display!=='none')cb.checked=true;});updateSummary();sortVolsByProximity();}
+function selectAllVols(){document.querySelectorAll('input[name="selected_vols"]').forEach(cb=>cb.checked=true);updateSummary();}
+function clearAllVols(){document.querySelectorAll('input[name="selected_vols"]').forEach(cb=>cb.checked=false);updateSummary();}
 function clearAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>cb.checked=false);updateSummary();}
 
 document.querySelectorAll('input[name="selected_addrs"]').forEach(cb=>cb.addEventListener('change',()=>{updateSummary();sortVolsByProximity();}));
