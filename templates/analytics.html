@@ -149,7 +149,7 @@ function updateStats(serviceId){
       </div>
       <div class="run-pct">{{ r.pct }}%</div>
       <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ 'rgba(52,199,89,.15)' if r.status=='complete' else 'rgba(79,142,247,.15)' }};color:{{ 'var(--green)' if r.status=='complete' else 'var(--accent)' }};flex-shrink:0">
-        {{ '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Done' if r.status=='complete' else '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> Active' }}
+        {% if r.status=='complete' %}<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.4"><polyline points="3,10 8,16 17,5"/></svg> Done{% else %}Active{% endif %}
       </span>
     </div>
     {% endfor %}
@@ -172,7 +172,7 @@ function updateStats(serviceId){
 
   <div class="analytics-grid">
     <div class="card">
-      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="14" y1="2" x2="14" y2="6"/></svg></span> {{ mt.icon }} {{ mt.label }} — Last 14 Days</div>
+      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="14" y1="2" x2="14" y2="6"/></svg></span> {{ mt.label }} — Last 14 Days</div>
       <canvas id="chart-{{ mt.id }}" height="160"></canvas>
     </div>
     <div class="card">
@@ -203,7 +203,7 @@ function updateStats(serviceId){
       <div style="font-size:11px;color:var(--text3);flex-shrink:0">{{ r.done }}/{{ r.total }}</div>
       <div class="run-pct">{{ r.pct }}%</div>
       <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ 'rgba(52,199,89,.15)' if r.status=='complete' else 'rgba(79,142,247,.15)' }};color:{{ 'var(--green)' if r.status=='complete' else 'var(--accent)' }};flex-shrink:0">
-        {{ '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Done' if r.status=='complete' else '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> Active' }}
+        {% if r.status=='complete' %}<svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.4"><polyline points="3,10 8,16 17,5"/></svg> Done{% else %}Active{% endif %}
       </span>
     </div>
     {% endfor %}
