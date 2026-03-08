@@ -957,6 +957,9 @@ def map_page():
             return None
         return _json.dumps(obj, default=default)
 
+    # Load turfs for map tab
+    turfs_data = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).execute().data or [])
+
     return render_template("map.html",
                            d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id},
                            active_run=safe_active_run,
@@ -965,7 +968,8 @@ def map_page():
                            addrs_json=_safe_dumps(addrs),
                            active_run_json=_safe_dumps(safe_active_run) if safe_active_run else "null",
                            runs_json=_safe_dumps(safe_runs),
-                           hex_colors_json=_safe_dumps(HEX_COLORS))
+                           hex_colors_json=_safe_dumps(HEX_COLORS),
+                           turfs_json=_safe_dumps(turfs_data))
 
 @app.route("/map/select/<run_id>")
 @login_required
@@ -1492,6 +1496,40 @@ def api_turf_precincts():
         chunk = db().table("constituents")            .select("id,lat,lng,status,first_name,last_name,address,party,support_score")            .eq("campaign_id",campaign_id).eq("precinct",p)            .limit(500).execute().data or []
         rows.extend(chunk)
     return jsonify(sanitize(rows))
+
+
+@app.route("/api/turf/suggest-volunteer", methods=["POST"])
+@login_required
+def api_turf_suggest():
+    """Suggest the closest volunteer to a turf based on precinct centroids"""
+    campaign_id = cid()
+    data = request.get_json() or {}
+    precinct_ids = data.get("precinct_ids", [])
+    if not precinct_ids:
+        return jsonify({"volunteer": None})
+    try:
+        # Get centroid of turf by averaging constituent lat/lngs
+        coords = []
+        for p in precinct_ids[:10]:
+            rows = db().table("constituents")                .select("lat,lng").eq("campaign_id",campaign_id).eq("precinct",p)                .not_.is_("lat","null").limit(50).execute().data or []
+            coords.extend([(r["lat"],r["lng"]) for r in rows if r.get("lat") and r.get("lng")])
+        if not coords:
+            return jsonify({"volunteer": None})
+        clat = sum(c[0] for c in coords)/len(coords)
+        clng = sum(c[1] for c in coords)/len(coords)
+        # Find closest volunteer with lat/lng
+        vols = sanitize(db().table("volunteers").select("id,name,address,lat,lng")            .eq("campaign_id",campaign_id).not_.is_("lat","null").execute().data or [])
+        best = None; best_dist = float("inf")
+        import math
+        for v in vols:
+            if not v.get("lat") or not v.get("lng"): continue
+            dlat = float(v["lat"])-clat; dlng = float(v["lng"])-clng
+            dist = math.sqrt(dlat**2+dlng**2)
+            if dist < best_dist:
+                best_dist = dist; best = v
+        return jsonify({"volunteer": best, "distance_deg": round(best_dist,4)})
+    except Exception as e:
+        return jsonify({"volunteer": None, "error": str(e)})
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OUTREACH / EMAILS
