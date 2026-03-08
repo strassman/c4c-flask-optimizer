@@ -626,15 +626,19 @@ def delivery_run():
             else:
                 # Re-fetch from DB fresh for POST to avoid stale sanitized data
                 all_vols=db().table("volunteers").select("*").eq("campaign_id",campaign_id).execute().data or []
-                all_addrs=db().table("constituents").select("*").eq("campaign_id",campaign_id).eq("status","pending").execute().data or []
+                # Fetch ONLY the selected constituent IDs directly — avoids Supabase 1000-row default limit
+                sel_addrs=[]
+                for chunk in [sel_cst_ids[i:i+100] for i in range(0,len(sel_cst_ids),100)]:
+                    rows=db().table("constituents").select("*").in_("id",chunk).eq("campaign_id",campaign_id).execute().data or []
+                    sel_addrs.extend([dict(a) for a in rows])
+                all_addrs=sel_addrs
                 sel_vols=[dict(v) for v in all_vols if str(v["id"]) in sel_vol_ids]
-                sel_addrs=[dict(a) for a in all_addrs if str(a["id"]) in sel_cst_ids]
                 print(f"matched: {len(sel_vols)} vols, {len(sel_addrs)} addrs", flush=True)
                 if not sel_vols or not sel_addrs:
                     msg="❌ Could not match selected volunteers or addresses. Please try again."
                     vols=sanitize(all_vols); addrs=sanitize([a for a in all_addrs])
                     addr_coords=[{"id":a["id"],"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs if a.get("lat")]
-                    return render_template("delivery_run.html",d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},msg=msg,addr_coords=addr_coords)
+                    return render_template("dispatch.html",d={"vols":vols,"addrs":addrs,"cname":cname,"cid":campaign_id},msg=msg,addr_coords_json=_json.dumps(addr_coords),dispatch_types=[])
                 # Geocode missing
                 for v in sel_vols:
                     if not v.get("lat") and v.get("address"):
