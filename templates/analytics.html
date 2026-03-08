@@ -102,11 +102,11 @@ function updateStats(serviceId){
 
 <!-- ── Mission type selector ─────────────────────────────────── -->
 <div class="mission-tabs">
-  <button class="mission-tab active" onclick="switchService('overview',this)">📊 Overview</button>
+  <button class="mission-tab active" onclick="switchService('overview',this)"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="12" width="3" height="6" rx="1"/><rect x="8" y="7" width="3" height="11" rx="1"/><rect x="14" y="3" width="3" height="15" rx="1"/></svg></span> Overview</button>
   {% for mt in d.mission_types %}
   {% set ss = d.service_stats.get(mt.id, {}) %}
   <button class="mission-tab" onclick="switchService('{{ mt.id }}',this)">
-    {{ mt.icon }} {{ mt.label }}
+    {{ mt.icon | safe }} {{ mt.label }}
     <span class="tab-count">{{ ss.get('runs',0) }}</span>
   </button>
   {% endfor %}
@@ -116,11 +116,11 @@ function updateStats(serviceId){
 <div class="service-panel active" id="panel-overview">
   <div class="analytics-grid">
     <div class="card">
-      <div class="card-title">📅 Activity — Last 14 Days</div>
+      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="14" y1="2" x2="14" y2="6"/></svg></span> Activity — Last 14 Days</div>
       <canvas id="overview-chart" height="160"></canvas>
     </div>
     <div class="card">
-      <div class="card-title">🏆 Overall Volunteer Leaderboard</div>
+      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h10v6a5 5 0 01-10 0V3z"/><path d="M5 6H3a2 2 0 000 4h2"/><path d="M15 6h2a2 2 0 010 4h-2"/><line x1="10" y1="14" x2="10" y2="17"/><line x1="7" y1="17" x2="13" y2="17"/></svg></span> Overall Volunteer Leaderboard</div>
       {% if d.leaderboard %}
       {% set max_placed = d.leaderboard[0].placed if d.leaderboard else 1 %}
       {% for v in d.leaderboard %}
@@ -136,12 +136,12 @@ function updateStats(serviceId){
   </div>
 
   <div class="card">
-    <div class="card-title">🏃 All Runs</div>
+    <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> All Runs</div>
     {% if d.run_stats %}
     {% for r in d.run_stats %}
     <div class="run-row">
       <div style="font-size:12px;width:20px;flex-shrink:0">
-        {% if r.run_type=='sign_delivery' %}🪧{% elif r.run_type=='lit_drop' %}📚{% elif r.run_type=='door_knock' %}🚪{% elif r.run_type=='sign_recovery' %}🔄{% elif r.run_type=='gotv' %}🗳️{% else %}📋{% endif %}
+        {% if r.run_type=='sign_delivery' %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/></svg></span>{% elif r.run_type=='lit_drop' %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><path d="M4 4h12v2l-2 4v6H6v-6L4 6z"/><line x1="6" y1="10" x2="14" y2="10"/></svg></span>{% elif r.run_type=='door_knock' %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="1.8"><rect x="4" y="2" width="12" height="18" rx="1"/><circle cx="13.5" cy="11" r="1" fill="currentColor"/></svg></span>{% elif r.run_type=='sign_recovery' %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#bf5af2" stroke-width="1.8"><path d="M4 10a6 6 0 1 0 1.5-4"/><polyline points="1,3 4,6 7,3"/><polyline points="8,10 10,12 14,8"/></svg></span>{% elif r.run_type=='gotv' %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ffd60a" stroke-width="1.8"><rect x="3" y="4" width="13" height="13" rx="1"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="2" x2="7" y2="6"/><line x1="13" y1="2" x2="13" y2="6"/><polyline points="7,12 9,14 13,11"/></svg></span>{% else %}<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#8b92a5" stroke-width="1.8"><rect x="3" y="3" width="13" height="13" rx="2"/><line x1="7" y1="8" x2="13" y2="8"/><line x1="7" y1="12" x2="11" y2="12"/></svg></span>{% endif %}
       </div>
       <div class="run-name">{{ r.name }}</div>
       <div style="flex:1;min-width:60px;max-width:140px">
@@ -149,7 +149,7 @@ function updateStats(serviceId){
       </div>
       <div class="run-pct">{{ r.pct }}%</div>
       <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ 'rgba(52,199,89,.15)' if r.status=='complete' else 'rgba(79,142,247,.15)' }};color:{{ 'var(--green)' if r.status=='complete' else 'var(--accent)' }};flex-shrink:0">
-        {{ '✅ Done' if r.status=='complete' else '🏃 Active' }}
+        {{ '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Done' if r.status=='complete' else '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> Active' }}
       </span>
     </div>
     {% endfor %}
@@ -172,11 +172,11 @@ function updateStats(serviceId){
 
   <div class="analytics-grid">
     <div class="card">
-      <div class="card-title">📅 {{ mt.icon }} {{ mt.label }} — Last 14 Days</div>
+      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="2" y="4" width="16" height="13" rx="2"/><line x1="2" y1="9" x2="18" y2="9"/><line x1="6" y1="2" x2="6" y2="6"/><line x1="14" y1="2" x2="14" y2="6"/></svg></span> {{ mt.icon }} {{ mt.label }} — Last 14 Days</div>
       <canvas id="chart-{{ mt.id }}" height="160"></canvas>
     </div>
     <div class="card">
-      <div class="card-title">🏆 Top Volunteers — {{ mt.label }}</div>
+      <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 3h10v6a5 5 0 01-10 0V3z"/><path d="M5 6H3a2 2 0 000 4h2"/><path d="M15 6h2a2 2 0 010 4h-2"/><line x1="10" y1="14" x2="10" y2="17"/><line x1="7" y1="17" x2="13" y2="17"/></svg></span> Top Volunteers — {{ mt.label }}</div>
       {% if ss.get('leaderboard') %}
       {% set max_ct = ss.leaderboard[0].count if ss.leaderboard else 1 %}
       {% for v in ss.leaderboard %}
@@ -192,7 +192,7 @@ function updateStats(serviceId){
   </div>
 
   <div class="card">
-    <div class="card-title">🏃 {{ mt.label }} Runs</div>
+    <div class="card-title"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> {{ mt.label }} Runs</div>
     {% if ss.get('run_completions') %}
     {% for r in ss.run_completions %}
     <div class="run-row">
@@ -203,7 +203,7 @@ function updateStats(serviceId){
       <div style="font-size:11px;color:var(--text3);flex-shrink:0">{{ r.done }}/{{ r.total }}</div>
       <div class="run-pct">{{ r.pct }}%</div>
       <span style="font-size:10px;padding:2px 7px;border-radius:10px;background:{{ 'rgba(52,199,89,.15)' if r.status=='complete' else 'rgba(79,142,247,.15)' }};color:{{ 'var(--green)' if r.status=='complete' else 'var(--accent)' }};flex-shrink:0">
-        {{ '✅ Done' if r.status=='complete' else '🏃 Active' }}
+        {{ '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Done' if r.status=='complete' else '<span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="4" cy="4" r="2"/><circle cx="16" cy="10" r="2"/><circle cx="4" cy="16" r="2"/><path d="M6 4h5a3 3 0 013 3v6a3 3 0 01-3 3H6"/></svg></span> Active' }}
       </span>
     </div>
     {% endfor %}
@@ -215,7 +215,7 @@ function updateStats(serviceId){
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px">
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">✅ Received {{ mt.label }}</div>
+        <div class="card-title" style="margin:0"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Received {{ mt.label }}</div>
         <span style="font-size:11px;color:var(--text3)" id="done-count-{{ mt.id }}"></span>
       </div>
       <div style="overflow-y:auto;max-height:320px" id="done-table-{{ mt.id }}">
@@ -225,7 +225,7 @@ function updateStats(serviceId){
     </div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">⏳ Not Yet Received</div>
+        <div class="card-title" style="margin:0"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#ff9500" stroke-width="1.8"><circle cx="10" cy="10" r="8"/><path d="M10 6v4l2.5 2.5"/></svg></span> Not Yet Received</div>
         <span style="font-size:11px;color:var(--text3)" id="pending-count-{{ mt.id }}"></span>
       </div>
       <div style="overflow-y:auto;max-height:320px" id="pending-table-{{ mt.id }}">
@@ -280,7 +280,7 @@ function renderServiceTable(mtId, view, rows, hasMore){
       <td style="padding:5px 8px;text-align:right">
         ${view==='done'
           ? `<button onclick="markConstit('${r.id}','pending',this)" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:var(--surface3);color:var(--text2);cursor:pointer">↩ Undo</button>`
-          : `<button onclick="markConstit('${r.id}','delivered',this)" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid rgba(52,199,89,.3);background:rgba(52,199,89,.1);color:var(--green);cursor:pointer">✅ Mark Done</button>`
+          : `<button onclick="markConstit('${r.id}','delivered',this)" style="font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid rgba(52,199,89,.3);background:rgba(52,199,89,.1);color:var(--green);cursor:pointer"><span style="display:inline-flex;align-items:center;vertical-align:middle;margin-right:3px"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="2.2"><polyline points="3,10 8,16 17,5"/></svg></span> Mark Done</button>`
         }
       </td>`;
     tbody.appendChild(tr);
