@@ -60,26 +60,53 @@
     {% else %}
     <div style="display:flex;gap:8px;margin:10px 0 8px;align-items:center">
       <input type="text" id="addr-search" placeholder="Filter…" oninput="filterAddrs(this.value)" style="flex:1;margin:0">
+      <button type="button" id="toggle-visited-btn" class="btn btn-secondary btn-sm" onclick="toggleVisited()" data-hiding="false">🙈 Hide Visited</button>
       <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllAddrs()">All</button>
       <button type="button" class="btn btn-secondary btn-sm" onclick="clearAllAddrs()">Clear</button>
     </div>
     <div id="addr-list" style="flex:1;overflow-y:auto;max-height:380px;padding-right:4px">
-    {% for a in d.addrs %}
-    <label class="addr-item" style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text)">
+    {% set type_icons = {'sign_delivery':'🪧','lit_drop':'📚','door_knock':'🚪','sign_recovery':'🔄','gotv':'🗳️','general':'📋'} %}
+    {# Sort: no prior visits first, then visited ones #}
+    {% set fresh = d.addrs | selectattr('prior_visits', 'equalto', []) | list %}
+    {% set visited = d.addrs | rejectattr('prior_visits', 'equalto', []) | list %}
+    {% for a in fresh + visited %}
+    {% set has_visits = a.prior_visits | length > 0 %}
+    <label class="addr-item" 
+           data-missing="{{ a.missing }}"
+           data-visited="{{ 'true' if has_visits else 'false' }}"
+           style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer;color:var(--text);{% if has_visits %}opacity:0.6;{% endif %}">
       <input type="checkbox" name="selected_addrs" value="{{ a.id }}" style="margin-top:3px;flex-shrink:0">
       <span style="font-size:13px;min-width:0;flex:1">
-        {{ a.address }}
+        <span>{{ a.address }}</span>
         {% if a.first_name or a.last_name %}
         <span style="color:var(--text3);font-size:12px"> · {{ a.first_name }} {{ a.last_name }}</span>
         {% endif %}
         {% if a.missing %}
         <span style="font-size:11px;color:var(--orange);margin-left:4px">⚠️ Missing</span>
         {% endif %}
+        {% if has_visits %}
+        <br>
+        {% for v in a.prior_visits[:3] %}
+        <span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:var(--surface3);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-top:3px;margin-right:3px;color:var(--text3)">
+          {{ type_icons.get(v.run_type, '📋') }} {{ v.run_type | replace('_',' ') | title }}
+          {% if v.date %}<span style="color:var(--text3)">· {{ v.date }}</span>{% endif %}
+          {% if v.vol %}<span>· {{ v.vol }}</span>{% endif %}
+        </span>
+        {% endfor %}
+        {% if a.prior_visits | length > 3 %}
+        <span style="font-size:10px;color:var(--text3)">+{{ a.prior_visits|length - 3 }} more</span>
+        {% endif %}
+        {% endif %}
       </span>
     </label>
     {% endfor %}
     </div>
-    <p style="color:var(--text3);font-size:12px;margin-top:8px" id="addr-count"></p>
+    {% set visited_count = d.addrs | rejectattr('prior_visits', 'equalto', []) | list | length %}
+    <p style="color:var(--text3);font-size:12px;margin-top:8px" id="addr-count">
+      {% if visited_count > 0 %}
+      <span style="color:var(--orange)">⚠️ {{ visited_count }} address{{ 'es' if visited_count != 1 }} already visited (shown at bottom)</span>
+      {% endif %}
+    </p>
     {% endif %}
   </div>
 </div>
@@ -207,7 +234,24 @@ function updateSummary(){
 }
 
 function filterVols(q){q=q.toLowerCase();document.querySelectorAll('.vol-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});}
-function filterAddrs(q){q=q.toLowerCase();document.querySelectorAll('.addr-item').forEach(el=>{el.style.display=el.textContent.toLowerCase().includes(q)?'':'none';});}
+function filterAddrs(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('.addr-item').forEach(el=>{
+    const textMatch = el.textContent.toLowerCase().includes(q);
+    el.style.display = textMatch ? '' : 'none';
+  });
+  updateSummary();
+}
+function toggleVisited(){
+  const btn = document.getElementById('toggle-visited-btn');
+  const hiding = btn.dataset.hiding !== 'true';
+  btn.dataset.hiding = hiding;
+  btn.textContent = hiding ? '👁 Show Visited' : '🙈 Hide Visited';
+  document.querySelectorAll('.addr-item[data-visited="true"]').forEach(el=>{
+    el.style.display = hiding ? 'none' : '';
+  });
+  updateSummary();
+}
 function selectAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>{if(cb.closest('.addr-item').style.display!=='none')cb.checked=true;});updateSummary();sortVolsByProximity();}
 function clearAllAddrs(){document.querySelectorAll('.addr-item input[type=checkbox]').forEach(cb=>cb.checked=false);updateSummary();}
 
