@@ -959,9 +959,17 @@ def map_page():
 
     # Load turfs for map tab
     turfs_data = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).execute().data or [])
+    # Volunteers + precincts for turf create form on map page
+    map_vols = sanitize(db().table("volunteers").select("id,name").eq("campaign_id",campaign_id).order("name").execute().data or [])
+    prec_rows = sanitize(db().table("constituents").select("precinct,precinct_name").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
+    seen_p = {}
+    for r in prec_rows:
+        p = r.get("precinct")
+        if p and p not in seen_p: seen_p[p] = r.get("precinct_name") or p
+    map_precincts = sorted([{"id":k,"name":v} for k,v in seen_p.items()], key=lambda x: x["id"])
 
     return render_template("map.html",
-                           d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id},
+                           d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id,"vols":map_vols,"precincts":map_precincts},
                            active_run=safe_active_run,
                            runs=safe_runs,
                            HEX_COLORS=HEX_COLORS,
@@ -1378,111 +1386,6 @@ def analytics():
 # ══════════════════════════════════════════════════════════════════════════════
 # TURFS
 # ══════════════════════════════════════════════════════════════════════════════
-@app.route("/turfs", methods=["GET","POST"])
-@login_required
-def turfs():
-    from collections import defaultdict
-    campaign_id = cid(); cname = session.get("cname","Campaign")
-    msg = None
-
-    if request.method == "POST":
-        action = request.form.get("action")
-
-        if action == "create":
-            name        = request.form.get("name","").strip()
-            vol_id      = request.form.get("volunteer_id","").strip() or None
-            precinct_ids= [p.strip() for p in request.form.get("precinct_ids","").split(",") if p.strip()]
-            party       = [p for p in request.form.getlist("party_filter") if p]
-            min_s       = int(request.form.get("min_support", 0) or 0)
-            max_s       = int(request.form.get("max_support", 100) or 100)
-            color       = request.form.get("color","#4f8ef7")
-            notes       = request.form.get("notes","").strip()
-            vol_name    = ""
-            if vol_id:
-                vr = db().table("volunteers").select("name").eq("id",vol_id).execute().data
-                vol_name = vr[0]["name"] if vr else ""
-            if name and precinct_ids:
-                db().table("turfs").insert({
-                    "campaign_id": campaign_id, "name": name,
-                    "volunteer_id": vol_id, "volunteer_name": vol_name,
-                    "precinct_ids": precinct_ids,
-                    "party_filter": party or None,
-                    "min_support": min_s, "max_support": max_s,
-                    "color": color, "notes": notes,
-                }).execute()
-                msg = f"Turf '{name}' created."
-            else:
-                msg = "Name and at least one precinct are required."
-
-        elif action == "delete":
-            turf_id = request.form.get("turf_id")
-            db().table("turfs").delete().eq("id",turf_id).eq("campaign_id",campaign_id).execute()
-            msg = "Turf deleted."
-
-        elif action == "assign_vol":
-            turf_id = request.form.get("turf_id")
-            vol_id  = request.form.get("volunteer_id","").strip() or None
-            vol_name = ""
-            if vol_id:
-                vr = db().table("volunteers").select("name").eq("id",vol_id).execute().data
-                vol_name = vr[0]["name"] if vr else ""
-            db().table("turfs").update({"volunteer_id":vol_id,"volunteer_name":vol_name})                .eq("id",turf_id).eq("campaign_id",campaign_id).execute()
-            msg = "Volunteer assigned."
-
-        elif action == "dispatch_turf":
-            # Create a dispatch run pre-populated from this turf
-            turf_id = request.form.get("turf_id")
-            run_type = request.form.get("run_type","sign_delivery")
-            turf_rows = db().table("turfs").select("*").eq("id",turf_id).execute().data
-            if not turf_rows:
-                return redirect(url_for("turfs"))
-            turf = turf_rows[0]
-            session["prefill_turf_id"] = turf_id
-            session["prefill_run_type"] = run_type
-            return redirect(url_for("dispatch"))
-
-    # Load all turfs
-    all_turfs = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
-
-    # For each turf compute universe + contact stats
-    turf_stats = {}
-    for t in all_turfs:
-        pid = t.get("precinct_ids") or []
-        if not pid:
-            turf_stats[t["id"]] = {"universe":0,"contacted":0,"pct":0,"pending":0}
-            continue
-        # Count universe
-        q = db().table("constituents").select("id,status",count="exact").eq("campaign_id",campaign_id)
-        # Supabase array overlap: use contains or in — use multiple eq with or via RPC isn't easy
-        # Simplest: fetch precinct counts per precinct and sum
-        total = 0; placed = 0
-        for p in pid[:20]:  # cap at 20 precincts per turf for perf
-            res = db().table("constituents").select("id",count="exact").eq("campaign_id",campaign_id).eq("precinct",p).execute()
-            don = db().table("constituents").select("id",count="exact").eq("campaign_id",campaign_id).eq("precinct",p).eq("status","delivered").execute()
-            total  += res.count or 0
-            placed += don.count or 0
-        pct = round(placed/total*100) if total else 0
-        turf_stats[t["id"]] = {"universe":total,"contacted":placed,"pct":pct,"pending":total-placed}
-
-    # Precinct list for the create form — distinct precincts from constituents
-    prec_rows = sanitize(db().table("constituents").select("precinct,precinct_name").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
-    seen = {}
-    for r in prec_rows:
-        p = r.get("precinct")
-        if p and p not in seen:
-            seen[p] = r.get("precinct_name") or p
-    precincts = sorted([{"id":k,"name":v} for k,v in seen.items()], key=lambda x: x["id"])
-
-    # Volunteers for assignment dropdown
-    vols = sanitize(db().table("volunteers").select("id,name,address").eq("campaign_id",campaign_id).order("name").execute().data or [])
-
-    return render_template("turfs.html", d={
-        "cname":cname,"cid":campaign_id,
-        "turfs":all_turfs,"turf_stats":turf_stats,
-        "precincts":precincts,"vols":vols,
-    }, msg=msg)
-
-
 @app.route("/api/turf/precincts")
 @login_required
 def api_turf_precincts():
@@ -1530,6 +1433,64 @@ def api_turf_suggest():
         return jsonify({"volunteer": best, "distance_deg": round(best_dist,4)})
     except Exception as e:
         return jsonify({"volunteer": None, "error": str(e)})
+
+
+@app.route("/api/turf/create", methods=["POST"])
+@login_required
+def api_turf_create():
+    campaign_id = cid()
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    precinct_ids = data.get("precinct_ids") or []
+    if not name or not precinct_ids:
+        return jsonify({"error": "Name and precincts required"})
+    vol_id   = data.get("volunteer_id") or None
+    vol_name = (data.get("volunteer_name") or "").strip()
+    color    = data.get("color") or "#4f8ef7"
+    try:
+        row = db().table("turfs").insert({
+            "campaign_id": campaign_id, "name": name,
+            "volunteer_id": vol_id, "volunteer_name": vol_name,
+            "precinct_ids": precinct_ids, "color": color,
+        }).execute().data
+        return jsonify({"turf": sanitize(row[0] if row else {})})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/turf/delete", methods=["POST"])
+@login_required
+def api_turf_delete():
+    campaign_id = cid()
+    data = request.get_json() or {}
+    turf_id = data.get("turf_id")
+    db().table("turfs").delete().eq("id", turf_id).eq("campaign_id", campaign_id).execute()
+    return jsonify({"ok": True})
+
+@app.route("/api/turf/assign", methods=["POST"])
+@login_required
+def api_turf_assign():
+    campaign_id = cid()
+    data = request.get_json() or {}
+    turf_id  = data.get("turf_id")
+    vol_id   = data.get("volunteer_id") or None
+    vol_name = (data.get("volunteer_name") or "").strip()
+    db().table("turfs").update({"volunteer_id": vol_id, "volunteer_name": vol_name})        .eq("id", turf_id).eq("campaign_id", campaign_id).execute()
+    return jsonify({"ok": True})
+
+@app.route("/api/turf/dispatch-prefill", methods=["POST"])
+@login_required
+def api_turf_dispatch_prefill():
+    campaign_id = cid()
+    data = request.get_json() or {}
+    turf_id  = data.get("turf_id")
+    run_type = data.get("run_type", "sign_delivery")
+    tr = db().table("turfs").select("*").eq("id", turf_id).execute().data
+    if not tr:
+        return jsonify({"ok": False})
+    t = tr[0]
+    session["prefill_turf_id"]  = turf_id
+    session["prefill_run_type"] = run_type
+    return jsonify({"ok": True})
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OUTREACH / EMAILS
