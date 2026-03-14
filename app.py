@@ -1492,6 +1492,46 @@ def api_turf_dispatch_prefill():
     session["prefill_run_type"] = run_type
     return jsonify({"ok": True})
 
+
+@app.route("/api/sign-suggestions")
+@login_required
+def api_sign_suggestions():
+    """Return sign placement suggestions, optionally filtered by tier."""
+    campaign_id = cid()
+    tier   = request.args.get("tier", "")        # A, B, C, or blank for all
+    status = request.args.get("status", "")      # suggested|dispatched|placed|rejected
+    limit  = int(request.args.get("limit", 300))
+    q = db().table("sign_suggestions")        .select("id,lat,lng,road_name,aadt,speed_limit,near_transit,transit_stop,supporter_count,score,tier,municipality,status")        .eq("campaign_id", campaign_id)        .order("score", desc=True)        .limit(limit)
+    if tier:   q = q.eq("tier", tier.upper())
+    if status: q = q.eq("status", status)
+    rows = sanitize(q.execute().data or [])
+    return jsonify(rows)
+
+@app.route("/api/sign-suggestions/stats")
+@login_required
+def api_sign_suggestion_stats():
+    campaign_id = cid()
+    rows = sanitize(db().table("sign_suggestions")        .select("tier,status")        .eq("campaign_id", campaign_id).execute().data or [])
+    tiers = {"A":0,"B":0,"C":0,"D":0}
+    statuses = {"suggested":0,"dispatched":0,"placed":0,"rejected":0}
+    for r in rows:
+        t = r.get("tier") or "D"; tiers[t] = tiers.get(t,0)+1
+        s = r.get("status") or "suggested"; statuses[s] = statuses.get(s,0)+1
+    return jsonify({"tiers": tiers, "statuses": statuses, "total": len(rows)})
+
+@app.route("/api/sign-suggestions/update", methods=["POST"])
+@login_required
+def api_sign_suggestion_update():
+    """Mark a suggestion as dispatched, placed, or rejected."""
+    campaign_id = cid()
+    data   = request.get_json() or {}
+    sig_id = data.get("id")
+    status = data.get("status")
+    if not sig_id or status not in ("suggested","dispatched","placed","rejected"):
+        return jsonify({"error": "invalid"}), 400
+    db().table("sign_suggestions")        .update({"status": status})        .eq("id", sig_id).eq("campaign_id", campaign_id).execute()
+    return jsonify({"ok": True})
+
 # ══════════════════════════════════════════════════════════════════════════════
 # OUTREACH / EMAILS
 # ══════════════════════════════════════════════════════════════════════════════
