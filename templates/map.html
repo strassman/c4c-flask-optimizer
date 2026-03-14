@@ -187,15 +187,15 @@
         <button class="sign-tier-btn" data-tier="C" onclick="setSignTier(this,'C')" style="color:#ff9500;border-color:#ff9500">C — Fair</button>
       </div>
       <div id="sign-stats" style="font-size:11px;color:var(--text3)">Loading…</div>
-    </div>
-
-    <button class="map-nav-btn" id="nav-placed" onclick="switchMap('placed')">
-      <div class="map-nav-icon" style="background:rgba(52,199,89,.15)">
-        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#34c759" stroke-width="1.8"><rect x="2" y="2" width="16" height="10" rx="2"/><line x1="10" y1="12" x2="10" y2="18"/><line x1="6" y1="18" x2="14" y2="18"/><polyline points="6,6 9,9 14,4"/></svg>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2)">
+          <div id="placed-toggle" onclick="togglePlacedOverlay()" style="width:32px;height:18px;border-radius:9px;background:var(--surface3);border:1px solid var(--border);position:relative;cursor:pointer;transition:background .2s;flex-shrink:0">
+            <div id="placed-toggle-knob" style="position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:var(--text3);transition:all .2s"></div>
+          </div>
+          Overlay placed signs
+        </label>
       </div>
-      Signs Placed
-      <span class="map-nav-badge green" id="badge-placed">—</span>
-    </button>
+    </div>
 
     <div class="sidebar-divider"></div>
     <div class="sidebar-section-label">Coming Soon</div>
@@ -387,20 +387,25 @@ function switchMap(id){
     missing: ['Missing / Stolen Signs', 'Reported missing or stolen'],
     turfs:   ['Turf Map',          ALL_TURFS.length ? `${ALL_TURFS.length} turf${ALL_TURFS.length!==1?'s':''} — click to toggle` : 'No turfs yet — create them on the Turfs page'],
     signs:   ['Sign Placement Suggestions', 'Ranked by traffic volume × speed × transit — SHA roads excluded'],
-    placed:  ['Signs Currently Placed', 'All confirmed sign locations — green = placed, blue = dispatched'],
   };
   const t = titles[id] || titles.routes;
   document.getElementById('map-title').textContent    = t[0];
   document.getElementById('map-subtitle').textContent = t[1];
+  // Clear placed overlay when leaving signs tab
+  if(id !== 'signs' && placedOverlayLayers.length){
+    placedOverlayLayers.forEach(l=>map.removeLayer(l));
+    placedOverlayLayers=[];
+    placedOverlayOn=false;
+    const toggle=document.getElementById('placed-toggle');
+    const knob=document.getElementById('placed-toggle-knob');
+    if(toggle){ toggle.style.background='var(--surface3)'; knob.style.left='2px'; knob.style.background='var(--text3)'; }
+  }
   if(id==='turfs'){
     clearLayers();
     renderTurfs();
   } else if(id==='signs'){
     clearLayers();
     renderSignSuggestions();
-  } else if(id==='placed'){
-    clearLayers();
-    renderPlacedSigns();
   } else {
     renderMap(id);
   }
@@ -864,84 +869,76 @@ async function updateSignStatus(id, status){
 }
 
 
-// ── Current Signs Layer ──────────────────────────────────────
-async function renderPlacedSigns(){
-  showLoading('Loading placed signs…');
-  const [placedResp, dispatchedResp, statsResp] = await Promise.all([
+
+// ── Placed Signs Overlay ─────────────────────────────────────
+let placedOverlayOn = false;
+let placedOverlayLayers = [];
+
+function togglePlacedOverlay(){
+  placedOverlayOn = !placedOverlayOn;
+  const toggle = document.getElementById('placed-toggle');
+  const knob   = document.getElementById('placed-toggle-knob');
+  if(placedOverlayOn){
+    toggle.style.background = '#34c759';
+    knob.style.left = '16px';
+    knob.style.background = '#fff';
+    renderPlacedOverlay();
+  } else {
+    toggle.style.background = 'var(--surface3)';
+    knob.style.left = '2px';
+    knob.style.background = 'var(--text3)';
+    placedOverlayLayers.forEach(l => map.removeLayer(l));
+    placedOverlayLayers = [];
+    // Refresh legend without placed count
+    renderSignSuggestions();
+  }
+}
+
+async function renderPlacedOverlay(){
+  const [placedResp, dispResp] = await Promise.all([
     fetch('/api/sign-suggestions?status=placed&limit=500'),
     fetch('/api/sign-suggestions?status=dispatched&limit=500'),
-    fetch('/api/sign-suggestions/stats'),
   ]);
   const placed     = await placedResp.json();
-  const dispatched = await dispatchedResp.json();
-  const stats      = await statsResp.json();
-  hideLoading();
+  const dispatched = await dispResp.json();
 
-  // Update badge
-  const total = (stats.statuses?.placed||0) + (stats.statuses?.dispatched||0);
-  document.getElementById('badge-placed').textContent = total || 0;
+  placedOverlayLayers.forEach(l => map.removeLayer(l));
+  placedOverlayLayers = [];
 
-  const bounds = [];
-  let placedCt = 0, dispatchedCt = 0;
-
-  const renderGroup = (items, color, label) => {
+  const addOverlayGroup = (items, color) => {
     items.forEach(s => {
-      if(!s.lat||!s.lng) return;
-
-      // Draw the road segment if we have geometry
+      if(!s.lat && !s.path_json) return;
       let layer;
       if(s.path_json){
         let paths; try{ paths=JSON.parse(s.path_json); }catch(e){ paths=null; }
         if(paths?.length){
-          const latLngs = paths.map(p=>p.map(pt=>[pt[1],pt[0]]));
-          layer = L.polyline(latLngs, {color, weight:5, opacity:0.9, lineCap:'round'});
-          latLngs.forEach(p=>p.forEach(pt=>bounds.push(pt)));
+          const ll = paths.map(p=>p.map(pt=>[pt[1],pt[0]]));
+          layer = L.polyline(ll, {color, weight:6, opacity:1, lineCap:'round',
+            dashArray: color==='#34c759' ? null : '8,4'});
         }
       }
-      if(!layer){
-        layer = L.circleMarker([s.lat,s.lng],{radius:7,color,fillColor:color,fillOpacity:.9,weight:1.5});
-        bounds.push([s.lat,s.lng]);
+      if(!layer && s.lat && s.lng){
+        layer = L.circleMarker([s.lat,s.lng],{radius:7,color,fillColor:color,fillOpacity:1,weight:2});
       }
-
-      const actionBtn = label === 'Dispatched'
-        ? `<button onclick="updateSignStatus('${s.id}','placed')" style="margin-top:6px;width:100%;padding:5px;font-size:11px;border-radius:5px;background:#34c759;color:#fff;border:none;cursor:pointer;font-weight:600">✓ Confirm Placed</button>`
-        : `<button onclick="updateSignStatus('${s.id}','suggested')" style="margin-top:6px;width:100%;padding:5px;font-size:11px;border-radius:5px;background:var(--surface3);color:var(--text2);border:1px solid var(--border);cursor:pointer">↩ Mark Removed</button>`;
-
-      layer.bindPopup(`
-        <div style="min-width:180px">
-          <div style="margin-bottom:5px">
-            <span style="background:${color};color:#000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">${label}</span>
-          </div>
-          <b style="font-size:13px">${s.road_name||'Unknown road'}</b>
-          ${s.municipality?`<div style="font-size:11px;color:var(--text3)">${s.municipality}</div>`:''}
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">
-            ${(s.aadt||0).toLocaleString()} cars/day · ${s.speed_limit||35}mph
-          </div>
-          ${actionBtn}
-        </div>`, {maxWidth:220});
-
-      addLayer(layer);
-      if(label==='Placed') placedCt++;
-      else dispatchedCt++;
+      if(!layer) return;
+      layer.bindTooltip(`✓ ${s.road_name||'Sign placed'}`, {permanent:false, direction:'top'});
+      layer.addTo(map);
+      placedOverlayLayers.push(layer);
     });
   };
 
-  renderGroup(placed,     '#34c759', 'Placed');
-  renderGroup(dispatched, '#4f8ef7', 'Dispatched');
+  addOverlayGroup(placed,     '#34c759');  // solid green = confirmed
+  addOverlayGroup(dispatched, '#4f8ef7');  // dashed blue = en route
 
-  if(!placedCt && !dispatchedCt){
-    setLegend('<div class="legend-row" style="color:var(--text3)">No signs placed or dispatched yet.<br>Use the Sign Placement tab to dispatch locations.</div>');
-    return;
-  }
-
-  // Coverage summary
-  setLegend(`
-    <div class="legend-row"><span class="legend-dot" style="background:#34c759"></span><span>${placedCt} confirmed placed</span></div>
-    <div class="legend-row"><span class="legend-dot" style="background:#4f8ef7"></span><span>${dispatchedCt} dispatched / en route</span></div>
-    <div class="legend-row" style="font-size:10px;color:var(--text3);margin-top:4px">Click any sign to confirm placed or mark removed</div>
-  `);
-
-  if(bounds.length) fitBounds(bounds);
+  // Update legend to include overlay info
+  const pc = placed.length, dc = dispatched.length;
+  const existingLegend = document.getElementById('map-legend').innerHTML;
+  const overlayLegend = `
+    <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
+      <div class="legend-row"><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34c759;margin-right:6px"></span>${pc} confirmed placed</div>
+      ${dc ? `<div class="legend-row"><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#4f8ef7;margin-right:6px;border-top:2px dashed #4f8ef7"></span>${dc} dispatched</div>` : ''}
+    </div>`;
+  document.getElementById('map-legend').innerHTML = existingLegend + overlayLegend;
 }
 
 </script>
