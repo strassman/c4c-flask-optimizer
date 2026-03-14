@@ -710,8 +710,12 @@ async function renderTurfs(){
 
 // ── Sign Placement ───────────────────────────────────────────
 let currentSignTier = '';
-const TIER_COLOR = { A:'#34c759', B:'#4f8ef7', C:'#ff9500', D:'#8b92a5' };
-const TIER_LABEL = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
+
+// Tier → color mapping (Apple Maps style: green=great, yellow=ok, red=avoid/skip)
+// We invert the usual traffic meaning — for signs, green = BEST location
+const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#ff3b30' };
+const TIER_WEIGHT = { A:5, B:4, C:3, D:2 };
+const TIER_LABEL  = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
 
 function setSignTier(el, tier){
   document.querySelectorAll('.sign-tier-btn').forEach(b=>b.classList.remove('active'));
@@ -722,111 +726,126 @@ function setSignTier(el, tier){
 }
 
 async function renderSignSuggestions(){
-  showLoading('Scoring sign locations…');
+  showLoading('Loading traffic data…');
   const tierParam = currentSignTier ? `&tier=${currentSignTier}` : '';
   const [dataResp, statsResp] = await Promise.all([
-    fetch(`/api/sign-suggestions?limit=300${tierParam}`),
+    fetch(`/api/sign-suggestions?limit=400${tierParam}`),
     fetch('/api/sign-suggestions/stats')
   ]);
   const suggestions = await dataResp.json();
   const stats = await statsResp.json();
   hideLoading();
 
-  // Update badge and stats panel
+  // Update badge + stats panel
   document.getElementById('badge-signs').textContent = stats.total || 0;
   const sp = document.getElementById('sign-stats');
   if(sp) sp.innerHTML = stats.total
-    ? `<span style="color:#34c759">A: ${stats.tiers.A||0}</span> &nbsp;
-       <span style="color:#4f8ef7">B: ${stats.tiers.B||0}</span> &nbsp;
-       <span style="color:#ff9500">C: ${stats.tiers.C||0}</span>
-       <div style="margin-top:4px;color:var(--text3)">
-         ${stats.statuses.placed||0} placed · ${stats.statuses.dispatched||0} dispatched · ${stats.statuses.rejected||0} rejected
+    ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+         <span style="color:#34c759">● A: ${stats.tiers.A||0}</span>
+         <span style="color:#ffd60a">● B: ${stats.tiers.B||0}</span>
+         <span style="color:#ff9500">● C: ${stats.tiers.C||0}</span>
+       </div>
+       <div style="color:var(--text3)">
+         ${stats.statuses.placed||0} placed &middot; ${stats.statuses.dispatched||0} en route &middot; ${stats.statuses.rejected||0} skipped
        </div>`
-    : '<span style="color:var(--orange)">No suggestions yet — run score_sign_locations.py first</span>';
+    : `<span style="color:var(--orange)">No data yet — run score_sign_locations.py first</span>`;
 
   if(!suggestions.length){
-    setLegend('<div class="legend-row" style="color:var(--text3)">No sign suggestions loaded yet.<br>Run the scoring script first.</div>');
+    setLegend('<div class="legend-row" style="color:var(--text3)">Run the scoring script to load road data.</div>');
     return;
   }
 
   const bounds = [];
-  suggestions.forEach(s=>{
-    if(!s.lat||!s.lng) return;
-    const color = TIER_COLOR[s.tier] || '#8b92a5';
-    const isDone = s.status === 'placed';
-    const isRejected = s.status === 'rejected';
-    if(isRejected) return; // hide rejected
 
-    const marker = L.circleMarker([s.lat, s.lng], {
-      radius: s.tier==='A' ? 9 : s.tier==='B' ? 7 : 5,
-      color: isDone ? '#fff' : color,
-      fillColor: isDone ? '#34c759' : color,
-      fillOpacity: isDone ? 1 : 0.8,
-      weight: isDone ? 2 : 1.5,
-    });
+  suggestions.forEach(s => {
+    if(s.status === 'rejected') return;
 
+    const color  = s.status === 'placed' ? '#ffffff' : (TIER_COLOR[s.tier] || '#8b92a5');
+    const weight = TIER_WEIGHT[s.tier] || 3;
+    const opacity = s.status === 'placed' ? 0.5 : 0.85;
+
+    // Draw polyline if we have path geometry, otherwise fall back to a dot
+    let layer;
+    if(s.path_json){
+      let paths;
+      try { paths = JSON.parse(s.path_json); } catch(e){ paths = null; }
+      if(paths && paths.length){
+        // ArcGIS paths are [[lng,lat],...] — Leaflet wants [lat,lng]
+        const latLngs = paths.map(path => path.map(pt => [pt[1], pt[0]]));
+        layer = L.polyline(latLngs, {
+          color, weight, opacity,
+          lineCap: 'round', lineJoin: 'round'
+        });
+        latLngs.forEach(path => path.forEach(pt => bounds.push(pt)));
+      }
+    }
+    if(!layer && s.lat && s.lng){
+      layer = L.circleMarker([s.lat, s.lng], {
+        radius: weight+2, color, fillColor: color,
+        fillOpacity: opacity, weight: 1.5
+      });
+      bounds.push([s.lat, s.lng]);
+    }
+    if(!layer) return;
+
+    // Popup
     const transitLine = s.near_transit
-      ? `<div style="color:#bf5af2;font-size:11px;margin-top:3px">
-           <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="14" height="11" rx="2"/><line x1="3" y1="8" x2="17" y2="8"/><line x1="7" y1="14" x2="5" y2="18"/><line x1="13" y1="14" x2="15" y2="18"/></svg>
-           Near: ${s.transit_stop||'bus stop'}
-         </div>` : '';
-    const supporterLine = s.supporter_count >= 3
+      ? `<div style="color:#bf5af2;font-size:11px;margin-top:3px">🚌 Near ${s.transit_stop||'bus stop'}</div>` : '';
+    const supportLine = s.supporter_count >= 3
       ? `<div style="color:#4f8ef7;font-size:11px">${s.supporter_count} supporters within 400m</div>` : '';
-    const dispatchBtn = s.status !== 'placed'
+    const actionBtns = s.status !== 'placed'
       ? `<div style="display:flex;gap:4px;margin-top:8px">
-           <button onclick="updateSignStatus('${s.id}','dispatched')" style="flex:1;padding:4px 6px;font-size:11px;border-radius:5px;background:#4f8ef7;color:#fff;border:none;cursor:pointer">Dispatch Sign</button>
-           <button onclick="updateSignStatus('${s.id}','placed')" style="padding:4px 6px;font-size:11px;border-radius:5px;background:#34c759;color:#fff;border:none;cursor:pointer">✓ Placed</button>
-           <button onclick="updateSignStatus('${s.id}','rejected')" style="padding:4px 6px;font-size:11px;border-radius:5px;background:var(--surface3);color:var(--text3);border:1px solid var(--border);cursor:pointer">✕</button>
-         </div>` : `<div style="color:#34c759;font-size:11px;margin-top:6px;font-weight:600">✓ Sign placed</div>`;
+           <button onclick="updateSignStatus('${s.id}','dispatched')" style="flex:1;padding:5px;font-size:11px;border-radius:5px;background:#4f8ef7;color:#fff;border:none;cursor:pointer;font-weight:600">Dispatch</button>
+           <button onclick="updateSignStatus('${s.id}','placed')"    style="flex:1;padding:5px;font-size:11px;border-radius:5px;background:#34c759;color:#fff;border:none;cursor:pointer;font-weight:600">✓ Placed</button>
+           <button onclick="updateSignStatus('${s.id}','rejected')"  style="padding:5px 8px;font-size:11px;border-radius:5px;background:var(--surface3);color:var(--text3);border:1px solid var(--border);cursor:pointer">✕</button>
+         </div>`
+      : `<div style="color:#34c759;font-weight:600;font-size:12px;margin-top:6px">✓ Sign placed here</div>`;
 
-    marker.bindPopup(`
-      <div style="min-width:190px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-          <span style="background:${color};color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px">Tier ${s.tier} — ${TIER_LABEL[s.tier]||''}</span>
+    layer.bindPopup(`
+      <div style="min-width:200px">
+        <div style="margin-bottom:6px">
+          <span style="background:${TIER_COLOR[s.tier]||'#888'};color:#000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">
+            Tier ${s.tier} — ${TIER_LABEL[s.tier]||''}
+          </span>
         </div>
-        <b style="font-size:13px">${s.road_name || 'Unnamed road'}</b>
-        ${s.municipality ? `<div style="font-size:11px;color:var(--text3)">${s.municipality}</div>` : ''}
-        <div style="margin-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:4px">
-          <div style="background:var(--surface2);border-radius:5px;padding:5px 8px;text-align:center">
-            <div style="font-size:15px;font-weight:700">${s.aadt?.toLocaleString()}</div>
+        <b style="font-size:13px">${s.road_name||'Unnamed road'}</b>
+        ${s.municipality?`<div style="font-size:11px;color:var(--text3)">${s.municipality}</div>`:''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:8px 0">
+          <div style="background:var(--surface2);border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:16px;font-weight:700">${(s.aadt||0).toLocaleString()}</div>
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Cars/Day</div>
           </div>
-          <div style="background:var(--surface2);border-radius:5px;padding:5px 8px;text-align:center">
-            <div style="font-size:15px;font-weight:700">${s.speed_limit}<span style="font-size:10px">mph</span></div>
+          <div style="background:var(--surface2);border-radius:6px;padding:6px;text-align:center">
+            <div style="font-size:16px;font-weight:700">${s.speed_limit||'?'}<span style="font-size:10px">mph</span></div>
             <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Speed Limit</div>
           </div>
         </div>
-        <div style="margin-top:5px;font-size:11px;color:var(--text3)">
-          Visibility score: <strong style="color:${color}">${Math.round(s.score||0).toLocaleString()}</strong>
+        <div style="font-size:11px;color:var(--text3)">
+          Visibility score: <b style="color:${TIER_COLOR[s.tier]||'#888'}">${Math.round(s.score||0).toLocaleString()}</b>
         </div>
-        ${transitLine}${supporterLine}
-        ${dispatchBtn}
-      </div>
-    `, {maxWidth: 240, className: 'dark-popup'});
+        ${transitLine}${supportLine}
+        ${actionBtns}
+      </div>`, {maxWidth:240});
 
-    addLayer(marker);
-    bounds.push([s.lat, s.lng]);
+    addLayer(layer);
   });
 
-  // Legend
-  const tierCounts = suggestions.reduce((a,s)=>{ a[s.tier]=(a[s.tier]||0)+1; return a; },{});
-  setLegend(
-    Object.entries(tierCounts).map(([t,n])=>
-      `<div class="legend-row"><span class="legend-dot" style="background:${TIER_COLOR[t]}"></span>
-       <span>Tier ${t} — ${TIER_LABEL[t]} (${n})</span></div>`
-    ).join('') +
-    `<div class="legend-row" style="font-size:10px;color:var(--text3);margin-top:4px">SHA right-of-way excluded · Speed-adjusted scores</div>`
-  );
+  // Legend — Apple Maps style color key
+  setLegend(`
+    <div class="legend-row"><span style="display:inline-block;width:24px;height:4px;border-radius:2px;background:#34c759;margin-right:6px"></span>Tier A — Premium (≥8,000 score)</div>
+    <div class="legend-row"><span style="display:inline-block;width:24px;height:4px;border-radius:2px;background:#ffd60a;margin-right:6px"></span>Tier B — Good (≥4,000)</div>
+    <div class="legend-row"><span style="display:inline-block;width:24px;height:4px;border-radius:2px;background:#ff9500;margin-right:6px"></span>Tier C — Fair (≥2,000)</div>
+    <div class="legend-row" style="font-size:10px;color:var(--text3);margin-top:4px">SHA right-of-way excluded · speed-adjusted · ${suggestions.filter(s=>s.status!=='rejected').length} segments shown</div>
+  `);
 
   if(bounds.length) fitBounds(bounds);
 }
 
 async function updateSignStatus(id, status){
-  await fetch('/api/sign-suggestions/update', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({id, status})
+  await fetch('/api/sign-suggestions/update',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id,status})
   });
-  // Close popup and refresh
   map.closePopup();
   clearLayers();
   renderSignSuggestions();
