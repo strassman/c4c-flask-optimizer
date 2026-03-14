@@ -1501,7 +1501,7 @@ def api_sign_suggestions():
     tier   = request.args.get("tier", "")        # A, B, C, or blank for all
     status = request.args.get("status", "")      # suggested|dispatched|placed|rejected
     limit  = int(request.args.get("limit", 300))
-    q = db().table("sign_suggestions")        .select("id,lat,lng,road_name,aadt,speed_limit,near_transit,transit_stop,supporter_count,score,tier,municipality,status")        .eq("campaign_id", campaign_id)        .order("score", desc=True)        .limit(limit)
+    q = db().table("sign_suggestions")        .select("id,lat,lng,road_name,aadt,speed_limit,near_transit,transit_stop,supporter_count,score,tier,municipality,status,path_json")        .eq("campaign_id", campaign_id)        .order("score", desc=True)        .limit(limit)
     if tier:   q = q.eq("tier", tier.upper())
     if status: q = q.eq("status", status)
     rows = sanitize(q.execute().data or [])
