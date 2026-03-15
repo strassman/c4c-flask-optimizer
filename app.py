@@ -117,7 +117,11 @@ def sanitize(obj):
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if "cid" not in session: return redirect(url_for("login_page"))
+        if "cid" not in session:
+            # API routes get 401 JSON — not a redirect that silently breaks fetch()
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "not authenticated"}), 401
+            return redirect(url_for("login_page"))
         return f(*args, **kwargs)
     return decorated
 
