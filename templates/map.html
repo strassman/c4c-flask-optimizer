@@ -288,6 +288,15 @@ const HEX_COLORS = {{ hex_colors_json|safe }};
 const activeRun  = {{ active_run_json|safe }};
 const allRuns    = {{ runs_json|safe }};
 
+// Sign placement — declared here so all functions can access them
+let allSignScores  = [];
+let roadLayers     = [];
+let signVpTimer    = null;
+let currentSignTier = '';
+const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#8b92a5' };
+const TIER_WEIGHT = { A:5, B:4, C:3, D:2 };
+const TIER_LABEL  = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
+
 // ── Map init ──────────────────────────────────────────────────
 const map = L.map('map',{preferCanvas:true,zoomControl:false}).setView([39.2904,-76.6122],11);
 L.control.zoom({position:'bottomright'}).addTo(map);
@@ -767,17 +776,7 @@ async function renderTurfs(){
 }
 
 // ── Sign Placement ───────────────────────────────────────
-let currentSignTier = '';
-const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#8b92a5' };
-const TIER_WEIGHT = { A:5, B:4, C:3, D:2 };
-const TIER_LABEL  = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
-
-// All scored locations from Supabase (metadata only, no geometry)
-let allSignScores  = [];
-// Road segments fetched from MDOT for current viewport
-let roadLayers     = [];
-// Timer for debouncing viewport changes
-let signVpTimer    = null;
+// (variables declared at top of script)
 
 function setSignTier(el, tier){
   document.querySelectorAll('.sign-tier-btn').forEach(b=>b.classList.remove('active'));
