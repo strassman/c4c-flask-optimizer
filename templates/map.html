@@ -68,6 +68,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<div id="campaign-id-data" data-cid="{{ cid }}" data-active-run-id="{{ active_run_id }}" style="display:none"></div>
 <div class="map-page">
   <div class="map-sidebar">
     <div class="sidebar-section-label">Views</div>
@@ -77,7 +78,7 @@
         <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="#4f8ef7" stroke-width="1.8"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
       </div>
       Active Routes
-      <span class="map-nav-badge" id="badge-runs">{{ runs|selectattr('status','equalto','active')|list|length }}</span>
+      <span class="map-nav-badge" id="badge-runs">—</span>
     </button>
 
     <button class="map-nav-btn" id="nav-pending" onclick="switchMap('pending')">
@@ -148,9 +149,14 @@
         <div style="margin-bottom:8px">
           <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin-bottom:4px">Color</div>
           <div style="display:flex;gap:5px;flex-wrap:wrap" id="tc-colors">
-            {% for c in ["#4f8ef7","#34c759","#ff9500","#ff3b30","#bf5af2","#ffd60a","#00c7be","#ff6b6b"] %}
-            <div onclick="turfSelectColor(this)" data-color="{{ c }}" style="width:20px;height:20px;border-radius:4px;background:{{ c }};cursor:pointer;border:2px solid {% if loop.first %}#fff{% else %}transparent{% endif %};transition:all .1s"></div>
-            {% endfor %}
+            <div onclick="turfSelectColor(this)" data-color="#4f8ef7" style="width:20px;height:20px;border-radius:4px;background:#4f8ef7;cursor:pointer;border:2px solid #fff;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#34c759" style="width:20px;height:20px;border-radius:4px;background:#34c759;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#ff9500" style="width:20px;height:20px;border-radius:4px;background:#ff9500;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#ff3b30" style="width:20px;height:20px;border-radius:4px;background:#ff3b30;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#bf5af2" style="width:20px;height:20px;border-radius:4px;background:#bf5af2;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#ffd60a" style="width:20px;height:20px;border-radius:4px;background:#ffd60a;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#00c7be" style="width:20px;height:20px;border-radius:4px;background:#00c7be;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
+            <div onclick="turfSelectColor(this)" data-color="#ff6b6b" style="width:20px;height:20px;border-radius:4px;background:#ff6b6b;cursor:pointer;border:2px solid transparent;transition:all .1s"></div>
           </div>
         </div>
         <div style="display:flex;gap:6px">
@@ -211,7 +217,7 @@
     <div class="map-topbar">
       <div>
         <div class="map-title" id="map-title">Active Routes</div>
-        <div class="map-subtitle" id="map-subtitle">{% if active_run %}Viewing: {{ active_run.name }}{% else %}Select a run from the drawer{% endif %}</div>
+        <div class="map-subtitle" id="map-subtitle">Select a run from the drawer</div>
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
@@ -227,7 +233,7 @@
         <div style="display:flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 10px">
           <span style="width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 5px var(--accent);display:inline-block"></span>
           <span style="font-size:12px;color:var(--text2)">Active Runs</span>
-          <strong style="font-size:12px;color:var(--text)">{{ runs|selectattr('status','equalto','active')|list|length }}</strong>
+          <strong style="font-size:12px;color:var(--text)">—</strong>
         </div>
         <button class="btn btn-secondary btn-sm" data-tip="View and switch between delivery runs" onclick="toggleDrawer()">
           <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="8" width="14" height="8" rx="2"/><path d="M15 10h2l2 3v3h-4"/><circle cx="5" cy="17" r="1.5"/><circle cx="13" cy="17" r="1.5"/></svg>
@@ -251,29 +257,7 @@
         </div>
         <div style="padding:0 12px 8px"><input type="text" placeholder="Search runs…" oninput="filterRuns(this.value)" style="margin:0"></div>
         <div class="runs-list">
-          {% if not runs %}
-          <div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No runs yet.</div>
-          {% endif %}
-          {% for run in runs %}
-          {% set pct = run.pct if run.pct is defined else 0 %}
-          <div class="run-item {% if active_run and run.id==active_run.id %}selected{% endif %} {% if run.status=='complete' %}complete{% endif %}"
-               data-status="{{ run.status }}"
-               data-search="{{ run.name|lower }} {{ run.vol_names|join(' ')|lower }}"
-               onclick="selectRun('{{ run.id }}')">
-            <div class="run-item-header">
-              <div class="run-name">{{ run.name }}</div>
-              <div class="run-status-dot {% if run.status=='active' %}dot-active{% else %}dot-complete{% endif %}"></div>
-            </div>
-            <div class="run-meta">
-              <span class="run-meta-chip">{{ run.timestamp[:6] if run.timestamp else '—' }}</span>
-              <span class="run-meta-chip">{{ run.routes|length }} vol{% if run.routes|length!=1%}s{% endif %}</span>
-              <span class="run-meta-chip">{{ run.total_stops }} stops</span>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" style="width:{{ pct }}%;background:{% if pct==100 %}var(--green){% else %}var(--accent){% endif %}"></div></div>
-            <div class="progress-label"><span>{{ run.done_count }}/{{ run.total_stops }} done</span><span>{{ pct }}%</span></div>
-            {% if run.vol_names %}<div class="run-vols">{{ run.vol_names|join(', ') }}</div>{% endif %}
-          </div>
-          {% endfor %}
+          <div id="runs-list-container"><div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">Loading runs…</div></div>
         </div>
       </div>
 
@@ -284,9 +268,10 @@
 </div>
 
 <script>
-const HEX_COLORS = {{ hex_colors_json|safe }};
-const activeRun  = {{ active_run_json|safe }};
-const allRuns    = {{ runs_json|safe }};
+// All map data loaded via /api/map/data — no inline JSON
+let HEX_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#c0392b","#5f9ea0","#27ae60"];
+let activeRun  = null;
+let allRuns    = [];
 
 // Sign placement — declared here so all functions can access them
 let allSignScores   = [];
@@ -460,7 +445,7 @@ async function renderMap(view){
       if(r.geometry&&r.geometry.length>1){
         addLayer(L.polyline(r.geometry,{color:hex,weight:4,opacity:.7}));
       } else if(stopCoords.length){
-        addLayer(L.polyline([[vol.lat,vol.lng],...stopCoords],{color:hex,weight:3,opacity:.6,dashArray:'6,4'}));
+        addLayer(L.polyline([[vol.lat,vol.lng]].concat(stopCoords),{color:hex,weight:3,opacity:.6,dashArray:'6,4'}));
       }
       let doneCt=0;
       r.stops.forEach((s,i)=>{
@@ -531,13 +516,77 @@ async function renderMap(view){
 }
 
 // ── Init ──────────────────────────────────────────────────────
-const ALL_TURFS = {{ turfs_json | safe }};
+let ALL_TURFS = []; // loaded via API in init
 const turfLayers = {};
 
-switchMap(activeRun ? 'routes' : 'master');
-buildTurfListPanel();
-// Update turf badge
-document.getElementById('badge-turfs').textContent = ALL_TURFS.length || '0';
+// Load all map data from API
+async function initMap(){
+  try {
+    const r = await fetch('/api/map/data');
+    if(!r.ok) throw new Error(r.status);
+    const data = await r.json();
+
+    // Populate globals
+    HEX_COLORS = data.hex_colors || HEX_COLORS;
+    allRuns    = data.runs || [];
+    ALL_TURFS  = data.turfs || [];
+
+    // Find active run
+    const savedRunId = document.getElementById('campaign-id-data').dataset.activeRunId;
+    activeRun = allRuns.find(r=>r.id===savedRunId) || (allRuns.length ? allRuns[0] : null);
+
+    // Update badges
+    const activeCount = allRuns.filter(r=>r.status==='active').length;
+    document.getElementById('badge-runs').textContent = activeCount || '0';
+    document.getElementById('badge-turfs').textContent = ALL_TURFS.length || '0';
+    const stats = await (await fetch('/api/constituents/stats')).json();
+    document.getElementById('stat-placed').textContent  = (stats.placed||0).toLocaleString();
+    document.getElementById('stat-pending').textContent = (stats.pending||0).toLocaleString();
+    document.getElementById('badge-total').textContent  = (stats.total||0).toLocaleString();
+    document.getElementById('badge-missing').textContent= (stats.missing||0).toLocaleString();
+    document.getElementById('stat-active-runs') && (document.getElementById('stat-active-runs').textContent = activeCount);
+
+    // Build runs drawer
+    buildRunsDrawer();
+    buildTurfListPanel();
+    switchMap(activeRun ? 'routes' : 'master');
+  } catch(e) {
+    console.error('initMap failed:', e);
+    switchMap('master');
+  }
+}
+
+function buildRunsDrawer(){
+  const container = document.getElementById('runs-list-container');
+  if(!container) return;
+  if(!allRuns.length){
+    container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No runs yet.</div>';
+    return;
+  }
+  container.innerHTML = allRuns.map(r=>{
+    const pct = r.pct || 0;
+    const isActive = activeRun && r.id===activeRun.id;
+    return `<div class="run-item ${isActive?'selected':''} ${r.status==='complete'?'complete':''}"
+      data-status="${r.status||''}"
+      data-search="${(r.name||'').toLowerCase()} ${(r.vol_names||[]).join(' ').toLowerCase()}"
+      onclick="selectRun('${r.id}')">
+      <div class="run-item-header">
+        <div class="run-name">${r.name||'Run'}</div>
+        <div class="run-status-dot ${r.status==='active'?'dot-active':'dot-complete'}"></div>
+      </div>
+      <div class="run-meta">
+        <span class="run-meta-chip">${(r.timestamp||'').slice(0,7)||'—'}</span>
+        <span class="run-meta-chip">${(r.routes||[]).length} vol${(r.routes||[]).length!==1?'s':''}</span>
+        <span class="run-meta-chip">${r.total_stops||0} stops</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct===100?'var(--green)':'var(--accent)'}"></div></div>
+      <div class="progress-label"><span>${r.done_count||0}/${r.total_stops||0} done</span><span>${pct}%</span></div>
+      ${r.vol_names&&r.vol_names.length?`<div class="run-vols">${r.vol_names.join(', ')}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+initMap();
 
 // ── Turf state ───────────────────────────────────────────────
 let turfFormLoaded = false;
@@ -605,7 +654,7 @@ async function turfSuggestVol(){
   if(!tcSelectedPrecs.size){ alert('Select at least one precinct first.'); return; }
   const btn = event.target; const orig = btn.textContent; btn.textContent='…'; btn.disabled=true;
   try {
-    const r = await fetch('/api/turf/suggest-volunteer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({precinct_ids:[...tcSelectedPrecs]})});
+    const r = await fetch('/api/turf/suggest-volunteer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({precinct_ids:Array.from(tcSelectedPrecs)})});
     const d = await r.json();
     if(d.volunteer){
       document.getElementById('tc-vol').value = d.volunteer.id;
@@ -625,12 +674,12 @@ async function turfCreate(){
   const vol_id = volSel.value || null;
   const vol_name = vol_id ? volSel.options[volSel.selectedIndex].dataset.name : '';
   const payload = { name, volunteer_id: vol_id, volunteer_name: vol_name,
-    precinct_ids: [...tcSelectedPrecs], color: tcColor, campaign_id: '{{ d.cid }}' };
+    precinct_ids: Array.from(tcSelectedPrecs), color: tcColor, campaign_id: document.getElementById('campaign-id-data').dataset.cid };
   try {
     const r = await fetch('/api/turf/create', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const d = await r.json();
-    if(d.turf){
-      ALL_TURFS.unshift(d.turf);
+    const resp = await r.json();
+    if(resp.turf){
+      ALL_TURFS.unshift(resp.turf);
       buildTurfListPanel();
       document.getElementById('tc-name').value='';
       tcSelectedPrecs.clear();
@@ -639,8 +688,8 @@ async function turfCreate(){
       document.getElementById('turf-create-form').style.display='none';
       document.getElementById('tc-suggest-msg').style.display='none';
       document.getElementById('badge-turfs').textContent = ALL_TURFS.length;
-      await toggleTurfLayer(d.turf.id);
-    } else { alert(d.error||'Failed to create turf.'); }
+      await toggleTurfLayer(resp.turf.id);
+    } else { alert(resp.error||'Failed to create turf.'); }
   } catch(e){ alert('Error creating turf.'); }
 }
 
@@ -883,7 +932,7 @@ async function renderSignsForViewport(){
     s.lat && s.lng && b.contains([s.lat,s.lng])
   );
   if(!scored.length){ hideLoading(); return; }
-  const minScore = Math.min(...scored.map(s=>s.score||0));
+  const minScore = Math.min.apply(null, scored.map(s=>s.score||0));
 
   // Build a score lookup by road name for coloring
   const scoreByRoad = {};
@@ -1026,3 +1075,5 @@ async function renderPlacedOverlay(){
   </div>`;
   legEl.appendChild(div);
 }
+</script>
+{% endblock %}
