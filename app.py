@@ -87,7 +87,12 @@ else: print("WARNING: SUPABASE_URL not set!", flush=True)
 COLORS     = ["red","blue","green","orange","purple","darkred","cadetblue","darkgreen"]
 HEX_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#c0392b","#5f9ea0","#27ae60"]
 
-def db(): return create_client(SUPABASE_URL, SUPABASE_KEY)
+def db():
+    """Return a cached Supabase client for this request (one connection per request)."""
+    from flask import g
+    if not hasattr(g, '_supabase'):
+        g._supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return g._supabase
 def cid(): return session.get("cid")
 
 def rows(result):
@@ -855,14 +860,25 @@ def map_page():
     # DO NOT load all constituents here — 100k rows kills the worker
     # Constituents are loaded on-demand via /api/constituents viewport API
     addrs = []  # empty — JS loads via viewport API
-    runs_raw=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
-    runs=[]
+    runs_raw = sanitize(db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
+    # Bulk fetch all stops for all runs in ONE query — no N+1
+    run_ids = [r["id"] for r in runs_raw]
+    all_stops = []
+    if run_ids:
+        for chunk in [run_ids[i:i+20] for i in range(0,len(run_ids),20)]:
+            chunk_stops = db().table("run_stops").select("id,run_id,status,volunteer_name")                .in_("run_id", chunk).execute().data or []
+            all_stops.extend(chunk_stops)
+    # Group stops by run_id
+    stops_by_run = {}
+    for s in all_stops:
+        stops_by_run.setdefault(s["run_id"], []).append(s)
+    runs = []
     for run in runs_raw:
-        stops=db().table("run_stops").select("id,status,volunteer_name").eq("run_id",run["id"]).execute().data or []
-        run["total_stops"]=len(stops)
-        run["done_count"]=sum(1 for s in stops if s["status"]=="delivered")
-        run["vol_names"]=list({s["volunteer_name"] for s in stops if s.get("volunteer_name")})
-        run["routes"]=_build_map_routes(run["id"])
+        stops = stops_by_run.get(run["id"], [])
+        run["total_stops"] = len(stops)
+        run["done_count"]  = sum(1 for s in stops if s["status"]=="delivered")
+        run["vol_names"]   = list({s["volunteer_name"] for s in stops if s.get("volunteer_name")})
+        run["routes"]      = _build_map_routes(run["id"])
         runs.append(run)
     active_run=next((r for r in runs if r["id"]==active_run_id), runs[0] if runs else None)
     # Safe JSON-serializable version of active_run for JS
