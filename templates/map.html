@@ -831,10 +831,8 @@ async function renderSignSuggestions(){
 function onSignViewportChange(){
   if(currentView !== 'signs') return;
   clearTimeout(signVpTimer);
-  signVpTimer = setTimeout(async ()=>{
-    await renderSignsForViewport();
-    if(placedOverlayOn) await renderPlacedOverlay();
-  }, 400);
+  signVpTimer = setTimeout(renderSignsForViewport, 400);
+  // Overlay reloads separately after signs render, not on every pan
 }
 
 async function renderSignsForViewport(){
@@ -946,7 +944,7 @@ async function renderSignsForViewport(){
   }
 
   updateSignLegend(scored);
-  if(placedOverlayOn) placedOverlayLayers.forEach(l=>l.bringToFront());
+  if(placedOverlayOn) renderPlacedOverlay();
 }
 
 
@@ -972,42 +970,59 @@ function togglePlacedOverlay(){
 }
 
 async function renderPlacedOverlay(){
-  const [placedResp, dispResp] = await Promise.all([
-    fetch('/api/sign-suggestions?status=placed&limit=500'),
-    fetch('/api/sign-suggestions?status=dispatched&limit=500'),
-  ]);
-  const placed     = await placedResp.json();
-  const dispatched = await dispResp.json();
-
-  placedOverlayLayers.forEach(l => map.removeLayer(l));
+  // Clear previous overlay
+  placedOverlayLayers.forEach(l=>{ try{ map.removeLayer(l); }catch(e){} });
   placedOverlayLayers = [];
 
-  const addOverlayGroup = (items, color, dash) => {
-    items.forEach(s => {
-      if(!s.lat || !s.lng) return;
-      const layer = L.circleMarker([s.lat, s.lng], {
-        radius: 9, color: '#fff', fillColor: color,
-        fillOpacity: 1, weight: 2
-      });
-      layer.bindTooltip(`✓ ${s.road_name||'Sign placed'}`, {permanent:false, direction:'top'});
-      layer.addTo(map);
-      placedOverlayLayers.push(layer);
+  // Remove any previous overlay legend entries
+  const legEl = document.getElementById('map-legend');
+  const existingOverlay = legEl.querySelector('.placed-overlay-legend');
+  if(existingOverlay) existingOverlay.remove();
+
+  if(!placedOverlayOn) return;
+
+  const b = map.getBounds();
+  const params = new URLSearchParams({
+    south: b.getSouth(), north: b.getNorth(),
+    west:  b.getWest(),  east:  b.getEast(),
+    status: 'delivered'
+  });
+
+  let placed = [];
+  try {
+    const r = await fetch('/api/constituents?' + params);
+    if(!r.ok) throw new Error('status '+r.status);
+    placed = await r.json();
+  } catch(e){
+    console.error('placed overlay error:', e);
+    return;
+  }
+
+  console.log('placed overlay: found', placed.length, 'delivered constituents in viewport');
+
+  placed.forEach(s => {
+    if(!s.lat || !s.lng) return;
+    const dot = L.circleMarker([s.lat, s.lng], {
+      radius: 10,
+      color: '#fff', weight: 2.5,
+      fillColor: '#34c759', fillOpacity: 1,
     });
-  };
+    const name = [s.first_name, s.last_name].filter(Boolean).join(' ');
+    dot.bindTooltip(`✓ Sign placed — ${s.address||''}${name?' ('+name+')':''}`, {direction:'top'});
+    dot.addTo(map);
+    placedOverlayLayers.push(dot);
+  });
 
-  addOverlayGroup(placed,     '#34c759');  // solid green = confirmed
-  addOverlayGroup(dispatched, '#4f8ef7');  // dashed blue = en route
+  // Bring all to front once
+  placedOverlayLayers.forEach(l=>{ try{ l.bringToFront(); }catch(e){} });
 
-  // Update legend to include overlay info
-  const pc = placed.length, dc = dispatched.length;
-  const existingLegend = document.getElementById('map-legend').innerHTML;
-  const overlayLegend = `
-    <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px">
-      <div class="legend-row"><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#34c759;margin-right:6px"></span>${pc} confirmed placed</div>
-      ${dc ? `<div class="legend-row"><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:#4f8ef7;margin-right:6px;border-top:2px dashed #4f8ef7"></span>${dc} dispatched</div>` : ''}
-    </div>`;
-  document.getElementById('map-legend').innerHTML = existingLegend + overlayLegend;
+  // Add single legend entry
+  const div = document.createElement('div');
+  div.className = 'placed-overlay-legend';
+  div.style.cssText = 'border-top:1px solid var(--border);margin-top:6px;padding-top:6px';
+  div.innerHTML = `<div class="legend-row">
+    <span class="legend-dot" style="background:#34c759;border:2px solid #fff;box-sizing:border-box"></span>
+    <span>${placed.length} signs placed in view</span>
+  </div>`;
+  legEl.appendChild(div);
 }
-
-</script>
-{% endblock %}
