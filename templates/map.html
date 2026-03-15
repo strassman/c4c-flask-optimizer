@@ -289,10 +289,12 @@ const activeRun  = {{ active_run_json|safe }};
 const allRuns    = {{ runs_json|safe }};
 
 // Sign placement — declared here so all functions can access them
-let allSignScores  = [];
-let roadLayers     = [];
-let signVpTimer    = null;
+let allSignScores   = [];
+let roadLayers      = [];
+let signVpTimer     = null;
 let currentSignTier = '';
+let placedOverlayOn     = false;
+let placedOverlayLayers = [];
 const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#8b92a5' };
 const TIER_WEIGHT = { A:5, B:4, C:3, D:2 };
 const TIER_LABEL  = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
@@ -946,9 +948,6 @@ async function renderSignsForViewport(){
 
 
 // ── Placed Signs Overlay ─────────────────────────────────────
-let placedOverlayOn = false;
-let placedOverlayLayers = [];
-
 function togglePlacedOverlay(){
   placedOverlayOn = !placedOverlayOn;
   const toggle = document.getElementById('placed-toggle');
