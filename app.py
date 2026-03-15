@@ -1517,6 +1517,22 @@ def api_turf_dispatch_prefill():
     return jsonify({"ok": True})
 
 
+
+@app.route("/api/sign-suggestions/test")
+def api_sign_suggestions_test():
+    """Public test endpoint — returns row count without auth."""
+    try:
+        url = os.environ.get("SUPABASE_URL","")
+        key = os.environ.get("SUPABASE_KEY","")
+        if not url or not key:
+            return jsonify({"error":"no supabase config"})
+        from supabase import create_client as _cc
+        _db = _cc(url, key)
+        rows = _db.table("sign_suggestions").select("id",count="exact").limit(1).execute()
+        return jsonify({"count": rows.count, "ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e), "ok": False})
+
 @app.route("/api/sign-suggestions")
 @login_required
 def api_sign_suggestions():
