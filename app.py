@@ -1507,18 +1507,6 @@ def api_sign_suggestions():
     rows = sanitize(q.execute().data or [])
     return jsonify(rows)
 
-@app.route("/api/sign-suggestions/geometry")
-@login_required
-def api_sign_suggestions_geometry():
-    """Return ONLY path_json for a batch of IDs — fetched lazily after map loads."""
-    campaign_id = cid()
-    ids = request.args.get("ids", "").split(",")
-    ids = [i.strip() for i in ids if i.strip()][:50]  # max 50 at a time
-    if not ids:
-        return jsonify([])
-    rows = sanitize(db().table("sign_suggestions")        .select("id,path_json")        .eq("campaign_id", campaign_id)        .in_("id", ids)        .execute().data or [])
-    return jsonify(rows)
-
 @app.route("/api/sign-suggestions/stats")
 @login_required
 def api_sign_suggestion_stats():
