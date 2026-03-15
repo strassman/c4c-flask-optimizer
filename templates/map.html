@@ -391,7 +391,12 @@ function switchMap(id){
   const t = titles[id] || titles.routes;
   document.getElementById('map-title').textContent    = t[0];
   document.getElementById('map-subtitle').textContent = t[1];
-  // Clear placed overlay when leaving signs tab
+  // Clear road geometry layers and unbind viewport listener when leaving signs tab
+  if(id !== 'signs'){
+    map.off('moveend', onSignViewportChange);
+    roadLayers.forEach(l=>{ try{map.removeLayer(l);}catch(e){} });
+    roadLayers=[];
+  }
   if(id !== 'signs' && placedOverlayLayers.length){
     placedOverlayLayers.forEach(l=>map.removeLayer(l));
     placedOverlayLayers=[];
@@ -725,32 +730,35 @@ async function renderTurfs(){
   }
 }
 
-// ── Sign Placement ───────────────────────────────────────────
+// ── Sign Placement ───────────────────────────────────────
 let currentSignTier = '';
-
-// Tier → color mapping (Apple Maps style: green=great, yellow=ok, red=avoid/skip)
-// We invert the usual traffic meaning — for signs, green = BEST location
-const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#ff3b30' };
+const TIER_COLOR  = { A:'#34c759', B:'#ffd60a', C:'#ff9500', D:'#8b92a5' };
 const TIER_WEIGHT = { A:5, B:4, C:3, D:2 };
 const TIER_LABEL  = { A:'Premium', B:'Good', C:'Fair', D:'Low' };
+
+// All scored locations from Supabase (metadata only, no geometry)
+let allSignScores  = [];
+// Road segments fetched from MDOT for current viewport
+let roadLayers     = [];
+// Timer for debouncing viewport changes
+let signVpTimer    = null;
 
 function setSignTier(el, tier){
   document.querySelectorAll('.sign-tier-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   currentSignTier = tier;
-  clearLayers();
-  renderSignSuggestions();
+  renderSignsForViewport();
 }
 
 async function renderSignSuggestions(){
-  showLoading('Loading sign locations…');
-  const tierParam = currentSignTier ? `&tier=${currentSignTier}` : '';
+  // Step 1: load all scored metadata from Supabase — fast, no geometry
+  showLoading('Loading scores…');
   const [dataResp, statsResp] = await Promise.all([
-    fetch(`/api/sign-suggestions?limit=400${tierParam}`),
+    fetch('/api/sign-suggestions?limit=400'),
     fetch('/api/sign-suggestions/stats'),
   ]);
-  const suggestions = await dataResp.json();
-  const stats       = await statsResp.json();
+  allSignScores = await dataResp.json();
+  const stats   = await statsResp.json();
   hideLoading();
 
   // Stats panel
@@ -763,92 +771,143 @@ async function renderSignSuggestions(){
          <span style="color:#ff9500">● C: ${stats.tiers.C||0}</span>
        </div>
        <div style="color:var(--text3)">${stats.statuses.placed||0} placed · ${stats.statuses.dispatched||0} en route · ${stats.statuses.rejected||0} skipped</div>`
-    : `<span style="color:var(--orange)">No data — run score_sign_locations.py first</span>`;
+    : '<span style="color:var(--orange)">No data — run score_sign_locations.py first</span>';
 
-  if(!suggestions.length){
+  if(!allSignScores.length){
     setLegend('<div class="legend-row" style="color:var(--text3)">Run the scoring script to load road data.</div>');
     return;
   }
 
-  const bounds = [];
-  suggestions.forEach(s => {
-    if(s.status === 'rejected') return;
-    if(!s.lat || !s.lng) return;
-    const color  = s.status === 'placed' ? '#34c759' : (TIER_COLOR[s.tier] || '#8b92a5');
-    const radius = (TIER_WEIGHT[s.tier] || 3) + 2;
-    const marker = L.circleMarker([s.lat, s.lng], {
-      radius, color, fillColor: color, fillOpacity: 0.85, weight: 1.5
-    });
-    marker.bindPopup(() => buildSignPopup(s), {maxWidth:240});
-    addLayer(marker);
-    bounds.push([s.lat, s.lng]);
-  });
-
-  updateSignLegend(suggestions);
+  // Step 2: fit map to all scored points, then fetch road geometry for viewport
+  const bounds = allSignScores
+    .filter(s=>s.lat&&s.lng&&s.status!=='rejected')
+    .map(s=>[s.lat,s.lng]);
   if(bounds.length) fitBounds(bounds);
-  if(placedOverlayOn) renderPlacedOverlay();
+
+  // Step 3: hook viewport changes to re-fetch road geometry when user pans/zooms
+  map.off('moveend', onSignViewportChange);
+  map.on('moveend', onSignViewportChange);
+
+  await renderSignsForViewport();
 }
 
-
-function buildSignPopup(s){
-  const color = TIER_COLOR[s.tier] || '#8b92a5';
-  const transitLine = s.near_transit
-    ? `<div style="color:#bf5af2;font-size:11px;margin-top:3px">🚌 Near ${s.transit_stop||'bus stop'}</div>` : '';
-  const supportLine = s.supporter_count >= 3
-    ? `<div style="color:#4f8ef7;font-size:11px">${s.supporter_count} supporters within 400m</div>` : '';
-  const actionBtns = s.status !== 'placed'
-    ? `<div style="display:flex;gap:4px;margin-top:8px">
-         <button onclick="updateSignStatus('${s.id}','dispatched')" style="flex:1;padding:5px;font-size:11px;border-radius:5px;background:#4f8ef7;color:#fff;border:none;cursor:pointer;font-weight:600">Dispatch</button>
-         <button onclick="updateSignStatus('${s.id}','placed')"    style="flex:1;padding:5px;font-size:11px;border-radius:5px;background:#34c759;color:#fff;border:none;cursor:pointer;font-weight:600">✓ Placed</button>
-         <button onclick="updateSignStatus('${s.id}','rejected')"  style="padding:5px 8px;font-size:11px;border-radius:5px;background:var(--surface3);color:var(--text3);border:1px solid var(--border);cursor:pointer">✕</button>
-       </div>`
-    : `<div style="color:#34c759;font-weight:600;font-size:12px;margin-top:6px">✓ Sign placed here</div>`;
-  return `<div style="min-width:200px">
-    <div style="margin-bottom:6px">
-      <span style="background:${color};color:#000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">
-        Tier ${s.tier} — ${TIER_LABEL[s.tier]||''}
-      </span>
-    </div>
-    <b style="font-size:13px">${s.road_name||'Unnamed road'}</b>
-    ${s.municipality?`<div style="font-size:11px;color:var(--text3)">${s.municipality}</div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:8px 0">
-      <div style="background:var(--surface2);border-radius:6px;padding:6px;text-align:center">
-        <div style="font-size:16px;font-weight:700">${(s.aadt||0).toLocaleString()}</div>
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Cars/Day</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:6px;padding:6px;text-align:center">
-        <div style="font-size:16px;font-weight:700">${s.speed_limit||35}<span style="font-size:10px">mph</span></div>
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Speed Limit</div>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--text3)">Score: <b style="color:${color}">${Math.round(s.score||0).toLocaleString()}</b></div>
-    ${transitLine}${supportLine}
-    ${actionBtns}
-  </div>`;
+function onSignViewportChange(){
+  if(currentView !== 'signs') return;
+  clearTimeout(signVpTimer);
+  signVpTimer = setTimeout(renderSignsForViewport, 400);
 }
 
-function updateSignLegend(suggestions){
-  const visible = suggestions.filter(s=>s.status!=='rejected');
-  const tierCounts = visible.reduce((a,s)=>{ a[s.tier]=(a[s.tier]||0)+1; return a; },{});
-  setLegend(
-    Object.entries(tierCounts).map(([t,n])=>
-      `<div class="legend-row"><span style="display:inline-block;width:20px;height:4px;border-radius:2px;background:${TIER_COLOR[t]};margin-right:6px"></span>Tier ${t} — ${TIER_LABEL[t]} (${n})</div>`
-    ).join('') +
-    `<div class="legend-row" style="font-size:10px;color:var(--text3);margin-top:4px">Dots upgrade to road lines as geometry loads · SHA excluded</div>`
+async function renderSignsForViewport(){
+  // Clear previous road layers (keep placed overlay)
+  roadLayers.forEach(l => { try{ map.removeLayer(l); }catch(e){} });
+  roadLayers = [];
+
+  const b = map.getBounds();
+  const zoom = map.getZoom();
+
+  // At low zoom just show score dots from our metadata — no geometry fetch
+  if(zoom < 12){
+    const filtered = allSignScores.filter(s => {
+      if(s.status === 'rejected') return false;
+      if(currentSignTier && s.tier !== currentSignTier) return false;
+      return s.lat && s.lng && b.contains([s.lat, s.lng]);
+    });
+    filtered.forEach(s => {
+      const color  = s.status==='placed' ? '#34c759' : (TIER_COLOR[s.tier]||'#8b92a5');
+      const radius = (TIER_WEIGHT[s.tier]||3) + 2;
+      const dot = L.circleMarker([s.lat,s.lng],{
+        radius, color, fillColor:color, fillOpacity:0.85, weight:1.5
+      });
+      dot.bindPopup(()=>buildSignPopup(s),{maxWidth:240});
+      dot.addTo(map);
+      roadLayers.push(dot);
+    });
+    updateSignLegend(filtered);
+    if(placedOverlayOn) placedOverlayLayers.forEach(l=>l.bringToFront());
+    return;
+  }
+
+  // At zoom 12+: fetch actual road polylines from MDOT for this viewport
+  showLoading('Fetching road lines…');
+
+  // Convert viewport to Web Mercator for MDOT API
+  const toWM = (lng,lat) => [
+    lng * 20037508.34/180,
+    Math.log(Math.tan((90+lat)*Math.PI/360))/(Math.PI/180)*20037508.34/180
+  ];
+  const sw = toWM(b.getWest(), b.getSouth());
+  const ne = toWM(b.getEast(), b.getNorth());
+
+  // Figure out which tier/score range to request
+  const scored = allSignScores.filter(s=>
+    s.status!=='rejected' &&
+    (!currentSignTier || s.tier===currentSignTier) &&
+    s.lat && s.lng && b.contains([s.lat,s.lng])
   );
-}
+  if(!scored.length){ hideLoading(); return; }
+  const minScore = Math.min(...scored.map(s=>s.score||0));
 
-
-async function updateSignStatus(id, status){
-  await fetch('/api/sign-suggestions/update',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id,status})
+  // Build a score lookup by road name for coloring
+  const scoreByRoad = {};
+  scored.forEach(s=>{
+    const key = (s.road_name||'').toUpperCase();
+    if(!scoreByRoad[key] || s.score > scoreByRoad[key].score)
+      scoreByRoad[key] = s;
   });
-  map.closePopup();
-  clearLayers();
-  renderSignSuggestions();
-}
 
+  try {
+    const url = 'https://mdgeodata.md.gov/imap/rest/services/Transportation/MD_AnnualAverageDailyTraffic/FeatureServer/1/query';
+    const params = new URLSearchParams({
+      f:'json', where:`AADT >= 1500 AND F_SYSTEM >= 3`,
+      outFields:'ROADNAME,AADT,F_SYSTEM',
+      returnGeometry:'true', inSR:'102100', outSR:'4326',
+      geometryType:'esriGeometryEnvelope',
+      geometry:JSON.stringify({xmin:sw[0],ymin:sw[1],xmax:ne[0],ymax:ne[1],spatialReference:{wkid:102100}}),
+      spatialRel:'esriSpatialRelIntersects',
+      resultRecordCount:'500',
+    });
+    const resp = await fetch(url+'?'+params);
+    const data = await resp.json();
+    hideLoading();
+
+    (data.features||[]).forEach(f=>{
+      const paths = f.geometry?.paths;
+      const rname = (f.attributes?.ROADNAME||'').toUpperCase();
+      if(!paths?.length) return;
+
+      // Match to our scored data by road name or proximity
+      const match = scoreByRoad[rname] || scored.find(s=>{
+        // fallback: any scored point within viewport
+        return s.lat && s.lng && b.contains([s.lat,s.lng]);
+      });
+      if(!match) return;
+
+      const color  = match.status==='placed' ? '#34c759' : (TIER_COLOR[match.tier]||'#8b92a5');
+      const weight = (TIER_WEIGHT[match.tier]||3) + 1;
+      const ll = paths.map(p=>p.map(pt=>[pt[1],pt[0]]));
+      const line = L.polyline(ll,{
+        color, weight, opacity:0.9, lineCap:'round', lineJoin:'round'
+      });
+      line.bindPopup(()=>buildSignPopup(match),{maxWidth:240});
+      line.addTo(map);
+      roadLayers.push(line);
+    });
+  } catch(e){
+    hideLoading();
+    console.warn('MDOT geometry fetch failed, showing dots:', e);
+    // Fallback to dots if MDOT is down
+    scored.forEach(s=>{
+      const color  = TIER_COLOR[s.tier]||'#8b92a5';
+      const dot = L.circleMarker([s.lat,s.lng],{radius:7,color,fillColor:color,fillOpacity:.85,weight:1.5});
+      dot.bindPopup(()=>buildSignPopup(s),{maxWidth:240});
+      dot.addTo(map);
+      roadLayers.push(dot);
+    });
+  }
+
+  updateSignLegend(scored);
+  if(placedOverlayOn) placedOverlayLayers.forEach(l=>l.bringToFront());
+}
 
 
 // ── Placed Signs Overlay ─────────────────────────────────────
