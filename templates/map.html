@@ -743,14 +743,14 @@ function setSignTier(el, tier){
 }
 
 async function renderSignSuggestions(){
-  showLoading('Loading sign data…');
+  showLoading('Loading sign locations…');
   const tierParam = currentSignTier ? `&tier=${currentSignTier}` : '';
   const [dataResp, statsResp] = await Promise.all([
     fetch(`/api/sign-suggestions?limit=400${tierParam}`),
     fetch('/api/sign-suggestions/stats'),
   ]);
   const suggestions = await dataResp.json();
-  const stats = await statsResp.json();
+  const stats       = await statsResp.json();
   hideLoading();
 
   // Stats panel
@@ -771,61 +771,24 @@ async function renderSignSuggestions(){
   }
 
   const bounds = [];
-  // Store markers by id so we can upgrade them to polylines later
-  const markerMap = {};
-
-  // Phase 1: render dots immediately — fast
   suggestions.forEach(s => {
     if(s.status === 'rejected') return;
+    if(!s.lat || !s.lng) return;
     const color  = s.status === 'placed' ? '#34c759' : (TIER_COLOR[s.tier] || '#8b92a5');
-    const radius = TIER_WEIGHT[s.tier] || 3;
-    if(!s.lat||!s.lng) return;
-    const dot = L.circleMarker([s.lat, s.lng], {
+    const radius = (TIER_WEIGHT[s.tier] || 3) + 2;
+    const marker = L.circleMarker([s.lat, s.lng], {
       radius, color, fillColor: color, fillOpacity: 0.85, weight: 1.5
     });
-    dot.bindPopup(() => buildSignPopup(s), {maxWidth:240});
-    addLayer(dot);
-    markerMap[s.id] = {dot, s};
+    marker.bindPopup(() => buildSignPopup(s), {maxWidth:240});
+    addLayer(marker);
     bounds.push([s.lat, s.lng]);
   });
 
   updateSignLegend(suggestions);
   if(bounds.length) fitBounds(bounds);
-
-  // Re-render placed overlay on top if it was on
   if(placedOverlayOn) renderPlacedOverlay();
-
-  // Phase 2: fetch geometry in batches and upgrade dots to lines silently
-  const ids = suggestions.filter(s=>s.status!=='rejected').map(s=>s.id);
-  for(let i=0; i<ids.length; i+=50){
-    const batch = ids.slice(i, i+50);
-    fetch(`/api/sign-suggestions/geometry?ids=${batch.join(',')}`)
-      .then(r=>r.json())
-      .then(geoRows => {
-        geoRows.forEach(g => {
-          const entry = markerMap[g.id];
-          if(!entry || !g.path_json) return;
-          let paths; try{ paths=JSON.parse(g.path_json); }catch(e){ return; }
-          if(!paths?.length) return;
-          const {dot, s} = entry;
-          // Remove dot, replace with polyline
-          map.removeLayer(dot);
-          const idx = layers.indexOf(dot);
-          if(idx>-1) layers.splice(idx,1);
-          const color  = s.status==='placed' ? '#34c759' : (TIER_COLOR[s.tier]||'#8b92a5');
-          const weight = TIER_WEIGHT[s.tier] || 3;
-          const ll = paths.map(p=>p.map(pt=>[pt[1],pt[0]]));
-          const line = L.polyline(ll, {color, weight: weight+1, opacity:0.85, lineCap:'round', lineJoin:'round'});
-          line.bindPopup(() => buildSignPopup(s), {maxWidth:240});
-          addLayer(line);
-          entry.dot = line;
-        });
-        // Keep placed overlay on top
-        if(placedOverlayOn) placedOverlayLayers.forEach(l=>l.bringToFront());
-      });
-    await new Promise(r=>setTimeout(r, 80)); // slight stagger between batches
-  }
 }
+
 
 function buildSignPopup(s){
   const color = TIER_COLOR[s.tier] || '#8b92a5';
@@ -923,22 +886,13 @@ async function renderPlacedOverlay(){
   placedOverlayLayers.forEach(l => map.removeLayer(l));
   placedOverlayLayers = [];
 
-  const addOverlayGroup = (items, color) => {
+  const addOverlayGroup = (items, color, dash) => {
     items.forEach(s => {
-      if(!s.lat && !s.path_json) return;
-      let layer;
-      if(s.path_json){
-        let paths; try{ paths=JSON.parse(s.path_json); }catch(e){ paths=null; }
-        if(paths?.length){
-          const ll = paths.map(p=>p.map(pt=>[pt[1],pt[0]]));
-          layer = L.polyline(ll, {color, weight:6, opacity:1, lineCap:'round',
-            dashArray: color==='#34c759' ? null : '8,4'});
-        }
-      }
-      if(!layer && s.lat && s.lng){
-        layer = L.circleMarker([s.lat,s.lng],{radius:7,color,fillColor:color,fillOpacity:1,weight:2});
-      }
-      if(!layer) return;
+      if(!s.lat || !s.lng) return;
+      const layer = L.circleMarker([s.lat, s.lng], {
+        radius: 9, color: '#fff', fillColor: color,
+        fillOpacity: 1, weight: 2
+      });
       layer.bindTooltip(`✓ ${s.road_name||'Sign placed'}`, {permanent:false, direction:'top'});
       layer.addTo(map);
       placedOverlayLayers.push(layer);
