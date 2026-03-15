@@ -831,7 +831,10 @@ async function renderSignSuggestions(){
 function onSignViewportChange(){
   if(currentView !== 'signs') return;
   clearTimeout(signVpTimer);
-  signVpTimer = setTimeout(renderSignsForViewport, 400);
+  signVpTimer = setTimeout(async ()=>{
+    await renderSignsForViewport();
+    if(placedOverlayOn) await renderPlacedOverlay();
+  }, 400);
 }
 
 async function renderSignsForViewport(){
