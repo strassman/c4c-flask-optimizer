@@ -88,11 +88,15 @@ COLORS     = ["red","blue","green","orange","purple","darkred","cadetblue","dark
 HEX_COLORS = ["#e74c3c","#3498db","#2ecc71","#f39c12","#9b59b6","#c0392b","#5f9ea0","#27ae60"]
 
 def db():
-    """Return a cached Supabase client for this request (one connection per request)."""
-    from flask import g
-    if not hasattr(g, '_supabase'):
-        g._supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    return g._supabase
+    """Return a Supabase client. Creates one per request via Flask g."""
+    try:
+        from flask import g
+        if not hasattr(g, '_supabase'):
+            g._supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        return g._supabase
+    except RuntimeError:
+        # Outside request context (e.g. tests) — create fresh client
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
 def cid(): return session.get("cid")
 
 def rows(result):
