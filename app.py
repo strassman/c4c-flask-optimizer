@@ -852,9 +852,9 @@ def _build_map_routes(run_id):
 def map_page():
     campaign_id=cid(); cname=session.get("cname","Campaign")
     active_run_id=session.get("active_run_id")
-    # Only load minimal constituent data for stats — full data loaded via viewport API
-    addrs_raw = db().table("constituents")        .select("id,address,lat,lng,status,missing,first_name,last_name,photo_url")        .eq("campaign_id",campaign_id).execute().data or []
-    addrs = sanitize(addrs_raw)
+    # DO NOT load all constituents here — 100k rows kills the worker
+    # Constituents are loaded on-demand via /api/constituents viewport API
+    addrs = []  # empty — JS loads via viewport API
     runs_raw=db().table("runs").select("*").eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or []
     runs=[]
     for run in runs_raw:
@@ -900,15 +900,27 @@ def map_page():
                 for r in active_run.get("routes",[])
             ],
         }
-    # Enrich stop coordinates from constituents for map rendering
+    # Enrich stop coordinates from constituent DB — fetch only what's needed
     if safe_active_run:
-        addr_map={a["address"]:{"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs}
+        all_addrs_needed = [s["address"] for r in safe_active_run["routes"] for s in r["stops"] if s.get("address")]
+        addr_map = {}
+        if all_addrs_needed:
+            for chunk in [all_addrs_needed[i:i+100] for i in range(0,len(all_addrs_needed),100)]:
+                rows = db().table("constituents").select("address,lat,lng")                    .eq("campaign_id",campaign_id).in_("address",chunk).execute().data or []
+                for r in rows:
+                    addr_map[r["address"]] = {"lat":r.get("lat"),"lng":r.get("lng")}
         for route in safe_active_run["routes"]:
             for stop in route["stops"]:
                 coords=addr_map.get(stop["address"],{})
                 stop["lat"]=coords.get("lat"); stop["lng"]=coords.get("lng")
-    # Build safe serializable runs list for JS (includes routes+stops for map rendering)
-    addr_coord_map = {a["address"]:{"lat":a.get("lat"),"lng":a.get("lng")} for a in addrs}
+    # Build safe serializable runs list for JS
+    addr_coord_map = {}
+    if runs:
+        all_stop_addrs = [s.get("address","") for r in runs for route in r.get("routes",[]) for s in route.get("stops",[])]
+        all_stop_addrs = list(set(filter(None, all_stop_addrs)))
+        for chunk in [all_stop_addrs[i:i+100] for i in range(0,len(all_stop_addrs),100)]:
+            rows = db().table("constituents").select("address,lat,lng")                .eq("campaign_id",campaign_id).in_("address",chunk).execute().data or []
+            for r in rows: addr_coord_map[r["address"]] = {"lat":r.get("lat"),"lng":r.get("lng")}
     safe_runs = []
     for r in runs:
         safe_routes = []
@@ -961,19 +973,15 @@ def map_page():
     turfs_data = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).execute().data or [])
     # Volunteers + precincts for turf create form on map page
     map_vols = sanitize(db().table("volunteers").select("id,name").eq("campaign_id",campaign_id).order("name").execute().data or [])
-    prec_rows = sanitize(db().table("constituents").select("precinct,precinct_name").eq("campaign_id",campaign_id).limit(5000).execute().data or [])
-    seen_p = {}
-    for r in prec_rows:
-        p = r.get("precinct")
-        if p and p not in seen_p: seen_p[p] = r.get("precinct_name") or p
-    map_precincts = sorted([{"id":k,"name":v} for k,v in seen_p.items()], key=lambda x: x["id"])
+    # Precincts loaded lazily via API when turf form opens — don't query 100k rows here
+    map_precincts = []
 
     return render_template("map.html",
                            d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id,"vols":map_vols,"precincts":map_precincts},
                            active_run=safe_active_run,
                            runs=safe_runs,
                            HEX_COLORS=HEX_COLORS,
-                           addrs_json=_safe_dumps(addrs),
+                           addrs_json="[]",
                            active_run_json=_safe_dumps(safe_active_run) if safe_active_run else "null",
                            runs_json=_safe_dumps(safe_runs),
                            hex_colors_json=_safe_dumps(HEX_COLORS),
@@ -1531,6 +1539,32 @@ def api_sign_suggestion_update():
         return jsonify({"error": "invalid"}), 400
     db().table("sign_suggestions")        .update({"status": status})        .eq("id", sig_id).eq("campaign_id", campaign_id).execute()
     return jsonify({"ok": True})
+
+
+@app.route("/api/map/precincts")
+@login_required
+def api_map_precincts():
+    """Lazy-load distinct precincts for the turf create form."""
+    campaign_id = cid()
+    rows = sanitize(db().table("constituents")
+        .select("precinct,precinct_name")
+        .eq("campaign_id", campaign_id)
+        .limit(5000).execute().data or [])
+    seen = {}
+    for r in rows:
+        p = r.get("precinct")
+        if p and p not in seen: seen[p] = r.get("precinct_name") or p
+    result = sorted([{"id":k,"name":v} for k,v in seen.items()], key=lambda x: x["id"])
+    return jsonify(result)
+
+
+@app.route("/api/volunteers/list")
+@login_required
+def api_volunteers_list():
+    campaign_id = cid()
+    rows = sanitize(db().table("volunteers").select("id,name")
+        .eq("campaign_id", campaign_id).order("name").execute().data or [])
+    return jsonify(rows)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OUTREACH / EMAILS
