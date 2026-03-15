@@ -889,102 +889,6 @@ def map_page():
         run["routes"]      = _build_map_routes(run["id"])
         runs.append(run)
     active_run=next((r for r in runs if r["id"]==active_run_id), runs[0] if runs else None)
-    # Safe JSON-serializable version of active_run for JS
-    safe_active_run=None
-    if active_run:
-        safe_active_run={
-            "id": active_run["id"],
-            "name": active_run["name"],
-            "status": active_run["status"],
-            "total_stops": active_run["total_stops"],
-            "done_count": active_run["done_count"],
-            "vol_names": active_run["vol_names"],
-            "routes": [
-                {
-                    "volunteer": {
-                        "name": r["volunteer"].get("name",""),
-                        "address": r["volunteer"].get("address",""),
-                        "lat": r["volunteer"].get("lat"),
-                        "lng": r["volunteer"].get("lng"),
-                    },
-                    "stops": [
-                        {
-                            "id": s.get("id",""),
-                            "address": s.get("address",""),
-                            "status": s.get("status","pending"),
-                            "volunteer_name": s.get("volunteer_name",""),
-                            "photo_url": s.get("photo_url"),
-                            "photo_taken_at": s.get("photo_taken_at"),
-                            "lat": None, "lng": None,
-                        }
-                        for s in r["stops"]
-                    ],
-                    "geometry": r.get("geometry",[]),
-                }
-                for r in active_run.get("routes",[])
-            ],
-        }
-    # Enrich stop coordinates from constituent DB — fetch only what's needed
-    if safe_active_run:
-        all_addrs_needed = [s["address"] for r in safe_active_run["routes"] for s in r["stops"] if s.get("address")]
-        addr_map = {}
-        if all_addrs_needed:
-            for chunk in [all_addrs_needed[i:i+100] for i in range(0,len(all_addrs_needed),100)]:
-                rows = db().table("constituents").select("address,lat,lng")                    .eq("campaign_id",campaign_id).in_("address",chunk).execute().data or []
-                for r in rows:
-                    addr_map[r["address"]] = {"lat":r.get("lat"),"lng":r.get("lng")}
-        for route in safe_active_run["routes"]:
-            for stop in route["stops"]:
-                coords=addr_map.get(stop["address"],{})
-                stop["lat"]=coords.get("lat"); stop["lng"]=coords.get("lng")
-    # Build safe serializable runs list for JS
-    addr_coord_map = {}
-    if runs:
-        all_stop_addrs = [s.get("address","") for r in runs for route in r.get("routes",[]) for s in route.get("stops",[])]
-        all_stop_addrs = list(set(filter(None, all_stop_addrs)))
-        for chunk in [all_stop_addrs[i:i+100] for i in range(0,len(all_stop_addrs),100)]:
-            rows = db().table("constituents").select("address,lat,lng")                .eq("campaign_id",campaign_id).in_("address",chunk).execute().data or []
-            for r in rows: addr_coord_map[r["address"]] = {"lat":r.get("lat"),"lng":r.get("lng")}
-    safe_runs = []
-    for r in runs:
-        safe_routes = []
-        for route in r.get("routes", []):
-            vol = route.get("volunteer") or {}
-            safe_stops = []
-            for s in route.get("stops", []):
-                coords = addr_coord_map.get(s.get("address",""), {})
-                safe_stops.append({
-                    "id":           s.get("id",""),
-                    "address":      s.get("address",""),
-                    "status":       s.get("status","pending"),
-                    "volunteer_name": s.get("volunteer_name",""),
-                    "contact":      s.get("contact",""),
-                    "phone":        s.get("phone",""),
-                    "photo_url":    s.get("photo_url"),
-                    "lat":          coords.get("lat"),
-                    "lng":          coords.get("lng"),
-                })
-            safe_routes.append({
-                "volunteer": {
-                    "name":    vol.get("name",""),
-                    "address": vol.get("address",""),
-                    "lat":     vol.get("lat"),
-                    "lng":     vol.get("lng"),
-                },
-                "stops":    safe_stops,
-                "geometry": route.get("geometry",[]),
-            })
-        delivered_ids = {s["id"] for route in r.get("routes",[]) for s in route.get("stops",[]) if s.get("status")=="delivered"}
-        safe_runs.append({
-            "id":          r["id"],
-            "name":        r["name"],
-            "status":      r["status"],
-            "total_stops": r["total_stops"],
-            "done_count":  r["done_count"],
-            "vol_names":   r["vol_names"],
-            "done_keys":   list(delivered_ids),
-            "routes":      safe_routes,
-        })
     import json as _json
 
     def _safe_dumps(obj):
@@ -1001,15 +905,10 @@ def map_page():
     map_precincts = []
 
     return render_template("map.html",
-                           d={"addrs":addrs,"runs":runs,"cname":cname,"cid":campaign_id,"vols":map_vols,"precincts":map_precincts},
-                           active_run=safe_active_run,
-                           runs=safe_runs,
-                           HEX_COLORS=HEX_COLORS,
-                           addrs_json="[]",
-                           active_run_json=_safe_dumps(safe_active_run) if safe_active_run else "null",
-                           runs_json=_safe_dumps(safe_runs),
-                           hex_colors_json=_safe_dumps(HEX_COLORS),
-                           turfs_json=_safe_dumps(turfs_data))
+                           cname=cname,
+                           cid=campaign_id,
+                           active_run_id=active_run_id or "",
+                           active_run_count=sum(1 for r in runs if r.get("status")=="active"))
 
 @app.route("/map/select/<run_id>")
 @login_required
@@ -1604,6 +1503,92 @@ def api_volunteers_list():
     campaign_id = cid()
     rows = sanitize(db().table("volunteers").select("id,name")
         .eq("campaign_id", campaign_id).order("name").execute().data or [])
+    return jsonify(rows)
+
+
+@app.route("/api/map/data")
+@login_required
+def api_map_data():
+    """Single endpoint serving all data the map page needs — runs, turfs, colors."""
+    campaign_id = cid()
+    import json as _j
+
+    # Runs with stops
+    runs_raw = sanitize(db().table("runs").select("*")
+        .eq("campaign_id",campaign_id).order("created_at",desc=True).execute().data or [])
+    run_ids = [r["id"] for r in runs_raw]
+    all_stops = []
+    if run_ids:
+        for chunk in [run_ids[i:i+20] for i in range(0,len(run_ids),20)]:
+            rows = db().table("run_stops").select("id,run_id,status,volunteer_name,address,photo_url,contact,phone")                .in_("run_id",chunk).execute().data or []
+            all_stops.extend(rows)
+    stops_by_run = {}
+    for s in all_stops:
+        stops_by_run.setdefault(s["run_id"],[]).append(s)
+
+    # Batch-fetch coordinates for all stop addresses
+    all_addrs = list({s["address"] for s in all_stops if s.get("address")})
+    addr_coords = {}
+    for chunk in [all_addrs[i:i+100] for i in range(0,len(all_addrs),100)]:
+        rows = db().table("constituents").select("address,lat,lng")            .eq("campaign_id",campaign_id).in_("address",chunk).execute().data or []
+        for r in rows:
+            addr_coords[r["address"]] = {"lat":r.get("lat"),"lng":r.get("lng")}
+
+    safe_runs = []
+    for r in runs_raw:
+        stops = stops_by_run.get(r["id"],[])
+        routes = _build_map_routes(r["id"])
+        safe_routes = []
+        for route in routes:
+            vol = route.get("volunteer") or {}
+            safe_stops = []
+            for s in route.get("stops",[]):
+                c = addr_coords.get(s.get("address",""),{})
+                safe_stops.append({
+                    "id":s.get("id",""), "address":s.get("address",""),
+                    "status":s.get("status","pending"),
+                    "volunteer_name":s.get("volunteer_name",""),
+                    "photo_url":s.get("photo_url"),
+                    "lat":c.get("lat"), "lng":c.get("lng"),
+                })
+            safe_routes.append({
+                "volunteer":{"name":vol.get("name",""),"address":vol.get("address",""),
+                             "lat":vol.get("lat"),"lng":vol.get("lng")},
+                "stops":safe_stops,
+                "geometry":route.get("geometry",[]),
+            })
+        done_ids = [s["id"] for s in stops if s.get("status")=="delivered"]
+        safe_runs.append({
+            "id":r["id"], "name":r["name"], "status":r.get("status","active"),
+            "total_stops":len(stops),
+            "done_count":sum(1 for s in stops if s.get("status")=="delivered"),
+            "vol_names":list({s["volunteer_name"] for s in stops if s.get("volunteer_name")}),
+            "done_keys":done_ids, "routes":safe_routes,
+            "timestamp":r.get("created_at","")[:10] if r.get("created_at") else "",
+            "run_type":r.get("run_type",""),
+            "pct": round(len(done_ids)/len(stops)*100) if stops else 0,
+        })
+
+    # Turfs
+    turfs = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).execute().data or [])
+
+    return jsonify({
+        "runs":      safe_runs,
+        "turfs":     turfs,
+        "hex_colors": HEX_COLORS,
+    })
+
+@app.route("/api/map/runs")
+@login_required
+def api_map_runs():
+    """Lightweight runs list for the map drawer."""
+    return api_map_data()
+
+@app.route("/api/turfs/list")
+@login_required
+def api_turfs_list():
+    campaign_id = cid()
+    rows = sanitize(db().table("turfs").select("*").eq("campaign_id",campaign_id).execute().data or [])
     return jsonify(rows)
 
 # ══════════════════════════════════════════════════════════════════════════════
